@@ -25,12 +25,55 @@
 static int init(hashpipe_thread_args_t * args)
 {
 
-    return 0;
+    input_databuf_t *db = (input_databuf_t *)args->obuf;
+    hashpipe_status_t * st = &args->st;
+    const char * status_key = args->thread_desc->skey;
+
+    // Variables to get/set status buffer fields
+    uint32_t max_flows = DEFAULT_MAX_FLOWS;
+    char ifname[80] = {0};
+    char ibvpktsz[80];
+    strcpy(ibvpktsz, "8192");
+
+    hashpipe_status_lock_safe(st);
+    {
+        // Get info from status buffer if present (no change if not present)
+        hgets(st->buf,  "IBVIFACE", sizeof(ifname), ifname);
+        if(ifname[0] == '\0') {
+        hgets(st->buf,  "BINDHOST", sizeof(ifname), ifname);
+        if(ifname[0] == '\0') {
+            strcpy(ifname, "eth4");
+            hputs(st->buf, "IBVIFACE", ifname);
+        }
+        }
+
+        hgets(st->buf,  "IBVPKTSZ", sizeof(ibvpktsz), ibvpktsz);
+        hgetu4(st->buf, "MAXFLOWS", &max_flows);
+
+        if(max_flows == 0) {
+        max_flows = 1;
+        }
+        // Store ibvpktsz in status buffer (in case it was not there before).
+        hputs(st->buf, "IBVPKTSZ", ibvpktsz);
+        hputu4(st->buf, "MAXFLOWS", max_flows);
+        // Set status_key to init
+        hputs(st->buf, status_key, "init");
+    }
+    hashpipe_status_unlock_safe(st);
+
+    // Success!
+    return HASHPIPE_OK;
+
 }
 
 static void *run(hashpipe_thread_args_t * args)
 {
-
+    // Local aliases to shorten access to args fields
+    hpguppi_input_databuf_t *db = (hpguppi_input_databuf_t *)args->obuf;
+    hashpipe_status_t * st = &args->st;
+    const char * thread_name = args->thread_desc->name;
+    const char * status_key = args->thread_desc->skey;
+    
 }
 
 static hashpipe_thread_desc_t ibverbs_pkt_recv_thread = {
