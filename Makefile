@@ -7,7 +7,7 @@ LIB_TARGET   = hashpipe_ibv_demo.so
 LIB_INCLUDES = -I./include \
 				-I/usr/local/include
 LIB_LINKS	 = -L. -L/usr/local/lib \
-					-lstdc++ -lhashpipe -lrt -lm
+			   -lstdc++ -lhashpipe -lhashpipe_ibverbs -lrt -lm
 
 LIB_DIR		 = lib
 SCRIPT_DIR	 = scripts

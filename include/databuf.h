@@ -3,15 +3,22 @@
 #include "hashpipe.h"
 #include "hashpipe_databuf.h"
 
-#define CACHE_ALIGNMENT         8
+#define CACHE_ALIGNMENT         4096
 
-#define PKT_SIZE                8200
-#define PKT_NUM_PER_BLOCK       16384
-#define N_BLOCKS_IN             32      // We use 8200*16384*32 = 4GB for input blocks.
+#define RPKT_HDR_SIZE           64
+#define RPKT_DAT_SIZE           8192
+#define RPKT_SIZE               (RPKT_HDR_SIZE + RPKT_DAT_SIZE)
+#define RPKTS_PER_BLOCK         16384
+#define N_BLOCKS_IN             32
+// We use 8256*16384*32 = 4.03125GB for input blocks.
+#define BLOCK_IN_DATA_SIZE      (RPKT_SIZE * RPKTS_PER_BLOCK * N_BLOCKS_IN)
 
 #define SPECTRA_SIZE            8192
-#define SPECTRA_NUM_PER_BLOCK   8192
-#define N_BLOCKS_OUT            32      // We use 8192*2*8192*32 = 4GBMB for output blocks.
+#define SPECTRAS_PER_BLOCK      8192
+#define N_BLOCKS_OUT            32
+// We use 8192*2*8192*32 = 4GBMB for output blocks.
+#define BLOCK_OUT_DATA_SIZE     (SPECTRA_SIZE * SPECTRAS_PER_BLOCK * N_BLOCKS_OUT) 
+
 
 /* INPUT BUFFER STRUCTURES*/
 typedef struct input_block_header {
@@ -23,14 +30,14 @@ typedef uint8_t input_header_cache_alignment[
 ];
 
 typedef struct adc_pkt {
-    uint64_t cnt;
-    uint8_t raw_adc_data[PKT_SIZE - sizeof(uint64_t)];
+    uint8_t adc_hdr[RPKT_HDR_SIZE];
+    uint8_t adc_data[RPKT_DAT_SIZE];
 } adc_pkt_t;
 
 typedef struct input_block {
    input_block_header_t header;
    input_header_cache_alignment padding; // Maintain cache alignment
-   adc_pkt_t adc[PKT_NUM_PER_BLOCK];
+   adc_pkt_t adc_pkt[RPKTS_PER_BLOCK];
 } input_block_t;
 
 typedef struct input_databuf {
@@ -56,7 +63,7 @@ typedef struct spectra_frame {
 typedef struct output_block {
    output_block_header_t header;
    output_header_cache_alignment padding; // Maintain cache alignment
-   spectra_frame_t spectra[SPECTRA_NUM_PER_BLOCK];
+   spectra_frame_t spectra[SPECTRAS_PER_BLOCK];
 } output_block_t;
 
 typedef struct output_databuf {
