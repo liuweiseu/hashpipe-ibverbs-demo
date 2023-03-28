@@ -297,14 +297,21 @@ static void *run(hashpipe_thread_args_t * args)
     int rv = 0;
     uint64_t curblk = 0;
     uint64_t next_block = 0;
+    uint32_t next_slot = 0;
 
-    wait_for_block_free(db, (curblk+i) % N_BLOCKS_IN, st, status_key);
+    wait_for_block_free(db, curblk % N_BLOCKS_IN, st, status_key);
     // Initialize IBV
     if(hpguppi_ibverbs_init(hibv_ctx, st, db)) {
         hashpipe_error(thread_name, "ibverbs_init failed");
         return NULL;
     }
-
+    
+    // Initialize next slot
+    next_slot = hibv_ctx->recv_pkt_num + 1;
+    if(next_slot > RPKTS_PER_BLOCK) {
+        next_slot = 0;
+        next_block++;
+    }
     // Variables for counting packets and bytes as well as elapsed time
     uint64_t bytes_received = 0;
     uint64_t pkts_received = 0;
@@ -348,8 +355,8 @@ static void *run(hashpipe_thread_args_t * args)
         }
         // If no packets
         if(!hibv_rpkt) {
-        // Wait for more packets
-        continue;
+            // Wait for more packets
+            continue;
         }
 
         // Got packets!
@@ -368,16 +375,10 @@ static void *run(hashpipe_thread_args_t * args)
             got_wc_error = 1;
             break;
         }
-            // If time to advance the ring buffer block
+        // If time to advance the ring buffer block
         if(next_block > curblk+1) {
             // Mark curblk as filled
-            hpguppi_databuf_set_filled(db, curblk % N_BLOCKS_IN);
-            clock_gettime(CLOCK_MONOTONIC, &ts_now);
-            fill_elapsed_ns = ELAPSED_NS(ts_block_filled, ts_now);
-            fill_moving_sum_ns +=
-                fill_elapsed_ns - fill_block_ns[curblk % N_BLOCKS_IN];
-            fill_block_ns[curblk % N_BLOCKS_IN] = fill_elapsed_ns;
-            memcpy(&ts_block_filled, &ts_now, sizeof(struct timespec));
+            hashpipe_databuf_set_filled(db, curblk % N_BLOCKS_IN);
 
             // Increment curblk
             curblk++;
@@ -391,18 +392,30 @@ static void *run(hashpipe_thread_args_t * args)
         bytes_received += curr_rpkt->length;
 
         // Update current WR with new destination addresses for all SGEs
-        base_addr = (uint64_t)hpguppi_pktbuf_block_slot_ptr(db, next_block, next_slot);
-        for(i=0; i<num_chunks; i++) {
-            curr_rpkt->wr.sg_list[i].addr = base_addr + chunks[i].chunk_offset;
-        }
-
+        base_addr = (uint64_t)pktbuf_block_slot_ptr(db, next_block, next_slot);
+        curr_rpkt->wr.sg_list->addr = base_addr;
+        
         // Advance slot
         next_slot++;
-        if(next_slot >= slots_per_block) {
+        if(next_slot >= RPKTS_PER_BLOCK) {
             next_slot = 0;
             next_block++;
         }
     }
+    // Break out of main loop if we got a work completion error
+    if(got_wc_error) {
+      break;
+    }
+
+    // Release packets (i.e. repost work requests)
+    if(hashpipe_ibv_release_pkts(hibv_ctx,
+          (struct hashpipe_ibv_recv_pkt *)hibv_rpkt)) {
+      hashpipe_error(thread_name, "hashpipe_ibv_release_pkts");
+      errno = 0;
+    }
+
+    // Will exit if thread has been cancelled
+    pthread_testcancel();
 }
 
 static hashpipe_thread_desc_t ibverbs_pkt_recv_thread = {
