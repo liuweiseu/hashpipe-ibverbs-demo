@@ -12,7 +12,7 @@
 #define RPKTS_PER_BLOCK         16384
 #define N_BLOCKS_IN             32
 // We use 8256*16384*32 = 4.03125GB for input blocks.
-#define BLOCK_IN_DATA_SIZE      (RPKT_SIZE * RPKTS_PER_BLOCK * N_BLOCKS_IN)
+#define BLOCK_IN_DATA_SIZE      (RPKT_SIZE * RPKTS_PER_BLOCK )
 
 #define SPECTRA_SIZE            8192
 #define SPECTRAS_PER_BLOCK      8192
@@ -31,6 +31,7 @@ typedef uint8_t input_header_cache_alignment[
 ];
 
 typedef struct adc_pkt {
+    uint8_t ip_udp_hdr[IP_UDP_HDR_SIZE];
     uint8_t adc_hdr[RPKT_HDR_SIZE];
     uint8_t adc_data[RPKT_DAT_SIZE];
 } adc_pkt_t;

@@ -27,7 +27,7 @@
 // Milliseconds between periodic status buffer updates
 #define PERIODIC_STATUS_BUFFER_UPDATE_MS (200)
 
-#define DEFAULT_MAX_FLOWS (16)
+#define DEFAULT_MAX_FLOWS (1)
 
 #ifndef ELAPSED_NS
 #define ELAPSED_NS(start,stop) \
@@ -41,6 +41,32 @@ static inline uint8_t *pktbuf_block_slot_ptr(input_databuf_t *db,
 {
   block_id %= db->header.n_block;
   return (uint8_t *)db->block[block_id].adc_pkt + slot_id * RPKT_SIZE;
+}
+
+// Queries the device specified by interface_name and returns max_qp_wr, or -1
+// on error.
+static int query_max_wr(const char * interface_name)
+{
+  uint64_t interface_id;
+  struct ibv_device_attr* ibv_dev_attr = malloc(sizeof(struct ibv_device_attr));
+  struct ibv_context* ibv_context = NULL;
+  int max_qp_wr = -1;
+
+  if(hashpipe_ibv_get_interface_info(interface_name, NULL, &interface_id)) {
+    hashpipe_error(interface_name, "error getting interace info");
+    errno = 0;
+    return -1;
+  }
+
+  if(hashpipe_ibv_open_device_for_interface_id(
+        interface_id, &ibv_context, ibv_dev_attr, NULL)) {
+    // Error message already logged
+    return -1;
+  }
+
+  max_qp_wr = ibv_dev_attr->max_qp_wr;
+  free(ibv_dev_attr);
+  return max_qp_wr;
 }
 
 // Function to get a pointer to a databuf's hashpipe_ibv_context structure.
@@ -157,14 +183,13 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
 
     // Number of send/recv packets (i.e. number of send/recv WRs)
     hibv_ctx->send_pkt_num = 1;
-    /*
-    int num_recv_wr = hpguppi_query_max_wr(hibv_ctx->interface_name);
+    
+    int num_recv_wr = query_max_wr(hibv_ctx->interface_name);
     hashpipe_info(__FUNCTION__, "max work requests of %s = %d", hibv_ctx->interface_name, num_recv_wr);
     if(num_recv_wr > RPKTS_PER_BLOCK) {
         num_recv_wr = RPKTS_PER_BLOCK;
     }
-    */
-    int num_recv_wr = RPKTS_PER_BLOCK;
+    //int num_recv_wr = RPKTS_PER_BLOCK;
     hibv_ctx->recv_pkt_num = num_recv_wr;
     hashpipe_info(__FUNCTION__, "using %d work requests", num_recv_wr);
 
@@ -221,7 +246,7 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
         hibv_ctx->recv_pkt_buf[i].wr.sg_list = &hibv_ctx->recv_sge_buf[i];
 
         base_addr = (uint64_t)pktbuf_block_slot_ptr(db, 0, i);
-        hibv_ctx->recv_sge_buf[i].addr = base_addr + i  * RPKT_SIZE;
+        hibv_ctx->recv_sge_buf[i].addr = base_addr;
         hibv_ctx->recv_sge_buf[i].length = RPKT_SIZE;
     }
 
@@ -320,6 +345,13 @@ static void *run(hashpipe_thread_args_t * args)
     double gbps;
     double pps;
 
+    // Update status_key with running state
+    hashpipe_status_lock_safe(st);
+    {
+        hputs(st->buf, status_key, "running");
+    }
+
+    hashpipe_status_unlock_safe(st);
     while (run_threads()) {
         hibv_rpkt = hashpipe_ibv_recv_pkts(hibv_ctx, 50); // 50 ms timeout
 
@@ -327,6 +359,7 @@ static void *run(hashpipe_thread_args_t * args)
         if(!hibv_rpkt && errno) {
             // Print error, reset errno, and continue receiving
             hashpipe_error(thread_name, "hashpipe_ibv_recv_pkts");
+            hashpipe_error(thread_name, "errno: %d",errno);
             errno = 0;
             continue;
         }
