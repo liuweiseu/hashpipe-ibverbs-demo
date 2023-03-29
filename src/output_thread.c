@@ -51,11 +51,11 @@ static void *run(hashpipe_thread_args_t * args)
         hashpipe_status_unlock_safe(st);
 
     // Wait for new input block to be filled
-    while ((rv=input_databuf_wait_free(db, curblock_in)) != HASHPIPE_OK) {
+    while ((rv=output_databuf_wait_filled(db, curblock_in)) != HASHPIPE_OK) {
         if (rv==HASHPIPE_TIMEOUT) {
-            hashpipe_status_lock_safe(&st);
+            hashpipe_status_lock_safe(st);
             hputs(st->buf, status_key, "blocked");
-            hashpipe_status_unlock_safe(&st);
+            hashpipe_status_unlock_safe(st);
             continue;
         } else {
             hashpipe_error(__FUNCTION__, "error waiting for filled databuf");
@@ -67,7 +67,7 @@ static void *run(hashpipe_thread_args_t * args)
     // TODO: Do something on the data here!
 
     // Mark input block as free and advance
-    input_databuf_set_free(db, curblock_in);
+    output_databuf_set_free(db, curblock_in);
     curblock_in = (curblock_in + 1) % db->header.n_block;
         
     // Check for cancel

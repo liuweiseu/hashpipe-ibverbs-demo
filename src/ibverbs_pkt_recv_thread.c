@@ -22,7 +22,7 @@
 #include "hashpipe_ibverbs.h"
 #include "databuf.h"
 
-#include <linux/time.h>
+#include <time.h>
 
 // Milliseconds between periodic status buffer updates
 #define PERIODIC_STATUS_BUFFER_UPDATE_MS (200)
@@ -39,7 +39,6 @@
 static inline uint8_t *pktbuf_block_slot_ptr(input_databuf_t *db,
                                              uint64_t block_id, uint32_t slot_id)
 {
-  struct hpguppi_pktbuf_info * pktbuf_info = hpguppi_pktbuf_info_ptr(db);
   block_id %= db->header.n_block;
   return (uint8_t *)db->block[block_id].adc_pkt + slot_id * RPKT_SIZE;
 }
@@ -159,11 +158,14 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
 
     // Number of send/recv packets (i.e. number of send/recv WRs)
     hibv_ctx->send_pkt_num = 1;
+    /*
     int num_recv_wr = hpguppi_query_max_wr(hibv_ctx->interface_name);
     hashpipe_info(__FUNCTION__, "max work requests of %s = %d", hibv_ctx->interface_name, num_recv_wr);
     if(num_recv_wr > RPKTS_PER_BLOCK) {
         num_recv_wr = RPKTS_PER_BLOCK;
     }
+    */
+    int num_recv_wr = RPKTS_PER_BLOCK;
     hibv_ctx->recv_pkt_num = num_recv_wr;
     hashpipe_info(__FUNCTION__, "using %d work requests", num_recv_wr);
 
@@ -299,7 +301,7 @@ static void *run(hashpipe_thread_args_t * args)
 
     wait_for_block_free(db, curblk % N_BLOCKS_IN, st, status_key);
     // Initialize IBV
-    if(hpguppi_ibverbs_init(hibv_ctx, st, db)) {
+    if(ibverbs_init(hibv_ctx, st, db)) {
         hashpipe_error(thread_name, "ibverbs_init failed");
         return NULL;
     }
@@ -375,7 +377,7 @@ static void *run(hashpipe_thread_args_t * args)
             // If time to advance the ring buffer block
             if(next_block > curblk+1) {
                 // Mark curblk as filled
-                hashpipe_databuf_set_filled(db, curblk % N_BLOCKS_IN);
+                input_databuf_busywait_filled(db, curblk % N_BLOCKS_IN);
 
                 // Increment curblk
                 curblk++;
