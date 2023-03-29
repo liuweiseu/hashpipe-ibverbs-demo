@@ -10,7 +10,6 @@ LIB_LINKS	 = -L. -L/usr/local/lib \
 			   -lstdc++ -lhashpipe -lhashpipe_ibverbs -lrt -lm
 
 LIB_DIR		 = lib
-SCRIPT_DIR	 = scripts
 
 LIB_SRCS = ${wildcard ./src/*.c}
 

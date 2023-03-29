@@ -233,8 +233,6 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
 // args: Arugments passed in by hashpipe framework.
 static int init(hashpipe_thread_args_t * args)
 {
-
-    input_databuf_t *db = (input_databuf_t *)args->obuf;
     hashpipe_status_t * st = &args->st;
     const char * status_key = args->thread_desc->skey;
 
@@ -326,10 +324,10 @@ static void *run(hashpipe_thread_args_t * args)
 
         // If no packets and errno is non-zero
         if(!hibv_rpkt && errno) {
-        // Print error, reset errno, and continue receiving
-        hashpipe_error(thread_name, "hashpipe_ibv_recv_pkts");
-        errno = 0;
-        continue;
+            // Print error, reset errno, and continue receiving
+            hashpipe_error(thread_name, "hashpipe_ibv_recv_pkts");
+            errno = 0;
+            continue;
         }
 
         // Check for periodic status buffer update interval
@@ -362,60 +360,60 @@ static void *run(hashpipe_thread_args_t * args)
         // Got packets!
 
         // For each packet: update SGE addr
-        for(curr_rpkt = hibv_rpkt; curr_rpkt;
-            curr_rpkt = (struct hashpipe_ibv_recv_pkt *)curr_rpkt->wr.next) {
+        for(curr_rpkt = hibv_rpkt; curr_rpkt;curr_rpkt = (struct hashpipe_ibv_recv_pkt *)curr_rpkt->wr.next) {
 
-        if(curr_rpkt->length == 0) {
-            hashpipe_error(thread_name,
-                "WR %d got error when using address: %p (databuf %p +%lu)",
-                curr_rpkt->wr.wr_id,
-                curr_rpkt->wr.sg_list->addr,
-                db->block, sizeof(db->block));
-            // Set flag to break out of main loop and then break out of for loop
-            got_wc_error = 1;
-            break;
+            if(curr_rpkt->length == 0) {
+                hashpipe_error(thread_name,
+                    "WR %d got error when using address: %p (databuf %p +%lu)",
+                    curr_rpkt->wr.wr_id,
+                    curr_rpkt->wr.sg_list->addr,
+                    db->block, sizeof(db->block));
+                // Set flag to break out of main loop and then break out of for loop
+                got_wc_error = 1;
+                break;
+            }
+            // If time to advance the ring buffer block
+            if(next_block > curblk+1) {
+                // Mark curblk as filled
+                hashpipe_databuf_set_filled(db, curblk % N_BLOCKS_IN);
+
+                // Increment curblk
+                curblk++;
+
+                // Wait for curblk+1 to be free
+                wait_for_block_free(db, (curblk+1) % N_BLOCKS_IN, st, status_key);
+            } // end block advance
+
+            // Count packet and bytes
+            pkts_received++;
+            bytes_received += curr_rpkt->length;
+
+            // Update current WR with new destination addresses for all SGEs
+            base_addr = (uint64_t)pktbuf_block_slot_ptr(db, next_block, next_slot);
+            curr_rpkt->wr.sg_list->addr = base_addr;
+            
+            // Advance slot
+            next_slot++;
+            if(next_slot >= RPKTS_PER_BLOCK) {
+                next_slot = 0;
+                next_block++;
+            }
         }
-        // If time to advance the ring buffer block
-        if(next_block > curblk+1) {
-            // Mark curblk as filled
-            hashpipe_databuf_set_filled(db, curblk % N_BLOCKS_IN);
-
-            // Increment curblk
-            curblk++;
-
-            // Wait for curblk+1 to be free
-            wait_for_block_free(db, (curblk+1) % N_BLOCKS_IN, st, status_key);
-        } // end block advance
-
-        // Count packet and bytes
-        pkts_received++;
-        bytes_received += curr_rpkt->length;
-
-        // Update current WR with new destination addresses for all SGEs
-        base_addr = (uint64_t)pktbuf_block_slot_ptr(db, next_block, next_slot);
-        curr_rpkt->wr.sg_list->addr = base_addr;
-        
-        // Advance slot
-        next_slot++;
-        if(next_slot >= RPKTS_PER_BLOCK) {
-            next_slot = 0;
-            next_block++;
+        // Break out of main loop if we got a work completion error
+        if(got_wc_error) {
+        break;
         }
-    }
-    // Break out of main loop if we got a work completion error
-    if(got_wc_error) {
-      break;
-    }
 
-    // Release packets (i.e. repost work requests)
-    if(hashpipe_ibv_release_pkts(hibv_ctx,
-          (struct hashpipe_ibv_recv_pkt *)hibv_rpkt)) {
-      hashpipe_error(thread_name, "hashpipe_ibv_release_pkts");
-      errno = 0;
-    }
+        // Release packets (i.e. repost work requests)
+        if(hashpipe_ibv_release_pkts(hibv_ctx,(struct hashpipe_ibv_recv_pkt *)hibv_rpkt)) {
+            hashpipe_error(thread_name, "hashpipe_ibv_release_pkts");
+            errno = 0;
+        }
 
-    // Will exit if thread has been cancelled
-    pthread_testcancel();
+        // Will exit if thread has been cancelled
+        pthread_testcancel();
+        }
+        return NULL;
 }
 
 static hashpipe_thread_desc_t ibverbs_pkt_recv_thread = {

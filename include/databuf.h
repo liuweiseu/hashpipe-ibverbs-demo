@@ -5,9 +5,10 @@
 
 #define CACHE_ALIGNMENT         4096
 
-#define RPKT_HDR_SIZE           64
+#define IP_UDP_HDR_SIZE         42
+#define RPKT_HDR_SIZE           22
 #define RPKT_DAT_SIZE           8192
-#define RPKT_SIZE               (RPKT_HDR_SIZE + RPKT_DAT_SIZE)
+#define RPKT_SIZE               (IP_UDP_HDR_SIZE + RPKT_HDR_SIZE + RPKT_DAT_SIZE)
 #define RPKTS_PER_BLOCK         16384
 #define N_BLOCKS_IN             32
 // We use 8256*16384*32 = 4.03125GB for input blocks.
