@@ -68,7 +68,7 @@ static void wait_for_block_free(input_databuf_t *db, int block_idx,
   int rv;
   char ibvstat[80] = {0};
   char ibvbuf_status[80];
-  int ibvbuf_full = hashpipe_databuf_total_status(db);
+  int ibvbuf_full = hashpipe_databuf_total_status((hashpipe_databuf_t *)db);
   sprintf(ibvbuf_status, "%d/%d", ibvbuf_full, db->header.n_block);
 
   hashpipe_status_lock_safe(st);
@@ -82,10 +82,9 @@ static void wait_for_block_free(input_databuf_t *db, int block_idx,
   }
   hashpipe_status_unlock_safe(st);
 
-  while ((rv=hashpipe_databuf_wait_free(db, block_idx))
-      != HASHPIPE_OK) {
+  while ((rv=input_databuf_wait_free(db, block_idx))!= HASHPIPE_OK) {
     if (rv==HASHPIPE_TIMEOUT) {
-      ibvbuf_full = hashpipe_databuf_total_status(db);
+      ibvbuf_full = hashpipe_databuf_total_status((hashpipe_databuf_t *)db);
       sprintf(ibvbuf_status, "%d/%d", ibvbuf_full, db->header.n_block);
       hashpipe_status_lock_safe(st);
       {
