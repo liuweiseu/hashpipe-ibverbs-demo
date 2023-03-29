@@ -18,9 +18,12 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include <infiniband/verbs.h>
+
 #include "hashpipe.h"
 #include "hashpipe_ibverbs.h"
 #include "databuf.h"
+
 
 #include <time.h>
 
@@ -67,6 +70,69 @@ static int query_max_wr(const char * interface_name)
   max_qp_wr = ibv_dev_attr->max_qp_wr;
   free(ibv_dev_attr);
   return max_qp_wr;
+}
+
+// Create sniffer flow
+// Use with caution!!!
+static struct ibv_flow *create_sniffer_flow(struct hashpipe_ibv_context * hibv_ctx, uint16_t sniffer_flag)
+{
+  struct hashpipe_ibv_flow sniffer_flow = {
+    .attr = {
+      .comp_mask      = 0,
+      .type           = IBV_FLOW_ATTR_NORMAL,
+      .size           = sizeof(sniffer_flow.attr)
+                        + sizeof(struct ibv_flow_spec_ipv4)
+                        + sizeof(struct ibv_flow_spec_eth)
+                        + sizeof(struct ibv_flow_spec_tcp_udp),
+      .priority       = 0,
+      .num_of_specs   = 0,
+      .port           = hibv_ctx->port_num,
+      .flags          = 0
+    },
+    .spec_eth = {
+      .type   = IBV_FLOW_SPEC_ETH,
+      .size   = sizeof(sniffer_flow.spec_eth),
+    },
+    .spec_ipv4 = {
+      .type   = IBV_FLOW_SPEC_IPV4,
+      .size   = sizeof(sniffer_flow.spec_ipv4),
+    },
+    .spec_tcp_udp = {
+      .type   = IBV_FLOW_SPEC_UDP,
+      .size   = sizeof(sniffer_flow.spec_tcp_udp),
+      .val.dst_port = htobe16(sniffer_flag),
+      .mask.dst_port = sniffer_flag >= 1024 ? 0xffff : 0x0,
+    }
+  };
+
+  if(sniffer_flag > 1) {
+    hashpipe_info(
+      __FUNCTION__,
+      "Masked sniffer ibv_flow to destination MAC %02X:%02X:%02X:%02X:%02X:%02X",
+      hibv_ctx->mac[0],
+      hibv_ctx->mac[1],
+      hibv_ctx->mac[2],
+      hibv_ctx->mac[3],
+      hibv_ctx->mac[4],
+      hibv_ctx->mac[5]
+    );
+    sniffer_flow.attr.num_of_specs = 1;
+    memcpy(sniffer_flow.spec_eth.val.dst_mac, hibv_ctx->mac, 6);
+    memset(sniffer_flow.spec_eth.mask.dst_mac, 0xff, 6);
+  }
+  if(sniffer_flag >= 49152) {
+    hashpipe_info(__FUNCTION__, "Masked sniffer ibv_flow to ephemeral port %d (in range [49152, 65535]).", sniffer_flag);
+    sniffer_flow.attr.num_of_specs = 3;
+  }
+
+  return ibv_create_flow(hibv_ctx->qp[0], (struct ibv_flow_attr*) &sniffer_flow.attr);
+}
+
+// Destroy sniffer flow
+// Use with caution!!!
+static int destroy_sniffer_flow(struct ibv_flow * sniffer_flow)
+{
+  return ibv_destroy_flow(sniffer_flow);
 }
 
 // Function to get a pointer to a databuf's hashpipe_ibv_context structure.
@@ -322,6 +388,8 @@ static void *run(hashpipe_thread_args_t * args)
     uint64_t curblk = 0;
     uint64_t next_block = 0;
     uint32_t next_slot = 0;
+    struct ibv_flow * sniffer_flow = NULL;
+    int32_t sniffer_flag = -1;
 
     wait_for_block_free(db, curblk % N_BLOCKS_IN, st, status_key);
     // Initialize IBV
@@ -345,9 +413,25 @@ static void *run(hashpipe_thread_args_t * args)
     double gbps;
     double pps;
 
+    uint32_t flow_idx = 0;
+    enum ibv_flow_spec_type flow_type = IBV_FLOW_SPEC_UDP;
+    uint8_t src_mac[6] = {0x0c, 0x42, 0xa1, 0xbe, 0x34, 0xf8};
+    uint16_t  ether_type = 0;
+    uint16_t  vlan_tag = 0;
+    uint32_t  src_ip = 0xc0a80202;
+    uint32_t  dst_ip = 0xc0a80228;
+    uint16_t  src_port = 49152;
+    uint16_t  dst_port = 49152;
+
+    hashpipe_ibv_flow( hibv_ctx, flow_idx, flow_type,
+                       hibv_ctx->mac, src_mac,
+                       ether_type,   vlan_tag,
+                       src_ip,       dst_ip,
+                       src_port,     dst_port);
     // Update status_key with running state
     hashpipe_status_lock_safe(st);
     {
+        hgeti4(st->buf, "IBVSNIFF", &sniffer_flag);
         hputs(st->buf, status_key, "running");
     }
 
@@ -384,6 +468,26 @@ static void *run(hashpipe_thread_args_t * args)
             // Reset counters
             bytes_received = 0;
             pkts_received = 0;
+
+            // Manage sniffer_flow as needed
+            if(sniffer_flag > 0 && !sniffer_flow) {
+                if(!(sniffer_flow = create_sniffer_flow(hibv_ctx, sniffer_flag))) {
+                hashpipe_error(thread_name, "create_sniffer_flow failed");
+                errno = 0;
+                sniffer_flag = -1;
+                } else {
+                hashpipe_info(thread_name, "create_sniffer_flow succeeded");
+                }
+            } else if (sniffer_flag == 0 && sniffer_flow) {
+                if(destroy_sniffer_flow(sniffer_flow)) {
+                hashpipe_error(thread_name, "destroy_sniffer_flow failed");
+                errno = 0;
+                sniffer_flag = -1;
+                } else {
+                hashpipe_info(thread_name, "destroy_sniffer_flow succeeded");
+                }
+                sniffer_flow = NULL;
+            }
         }
         // If no packets
         if(!hibv_rpkt) {

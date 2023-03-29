@@ -4,8 +4,10 @@ LIB_CCFLAGS     = -g -O3 -fPIC -shared -msse4
 
 LIB_TARGET   = hp_ibv_demo.so
 
-LIB_INCLUDES = -I./include \
-				-I/usr/local/include
+LIB_INCLUDES =	-I./include \
+			   	-I/usr/local/include \
+				-I/usr/include
+				
 LIB_LINKS	 = -L. -L/usr/local/lib \
 			   -lstdc++ -lhashpipe -lhashpipe_ibverbs -lrt -lm -libverbs
 
