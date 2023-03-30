@@ -88,7 +88,8 @@ static void *run(hashpipe_thread_args_t * args)
         //TODO: move data into GPU for further processing
         for(slot_id = 0; slot_id<RPKTS_PER_BLOCK; slot_id++)
         {
-            cur_mcnt = db_in->block[curblock_in].header.mcnt;
+            //cur_mcnt = db_in->block[curblock_in].header.mcnt;
+            cur_mcnt ++;
             pkt_loss += cur_mcnt - pre_mcnt;
             pre_mcnt = cur_mcnt;
         }

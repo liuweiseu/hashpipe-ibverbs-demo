@@ -27,7 +27,7 @@ typedef struct input_block_header {
 } input_block_header_t;
 
 typedef uint8_t input_header_cache_alignment[
-   CACHE_ALIGNMENT - (sizeof(input_block_header_t)%CACHE_ALIGNMENT)
+   CACHE_ALIGNMENT - (sizeof(hashpipe_databuf_t)%CACHE_ALIGNMENT)
 ];
 
 typedef struct adc_pkt {
@@ -37,8 +37,6 @@ typedef struct adc_pkt {
 } adc_pkt_t;
 
 typedef struct input_block {
-   input_block_header_t header;
-   input_header_cache_alignment padding; // Maintain cache alignment
    adc_pkt_t adc_pkt[RPKTS_PER_BLOCK];
 } input_block_t;
 

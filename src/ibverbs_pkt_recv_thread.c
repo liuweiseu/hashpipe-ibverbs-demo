@@ -30,7 +30,7 @@
 // Milliseconds between periodic status buffer updates
 #define PERIODIC_STATUS_BUFFER_UPDATE_MS (200)
 
-#define DEFAULT_MAX_FLOWS (1)
+#define DEFAULT_MAX_FLOWS (16)
 
 #ifndef ELAPSED_NS
 #define ELAPSED_NS(start,stop) \
@@ -71,6 +71,7 @@ static int query_max_wr(const char * interface_name)
   free(ibv_dev_attr);
   return max_qp_wr;
 }
+
 
 // Create sniffer flow
 // Use with caution!!!
@@ -374,6 +375,8 @@ static void *run(hashpipe_thread_args_t * args)
     const char * status_key = args->thread_desc->skey;
 
     // The all important hashpipe_ibv_context
+    //struct hashpipe_ibv_context hibv_ctx_inst;
+    //struct hashpipe_ibv_context * hibv_ctx = &hibv_ctx_inst;
     struct hashpipe_ibv_context * hibv_ctx = hashpipe_ibv_context_ptr(db);
 
     // Variables for handing received packets
@@ -422,12 +425,14 @@ static void *run(hashpipe_thread_args_t * args)
     uint32_t  dst_ip = 0xc0a80228;
     uint16_t  src_port = 49152;
     uint16_t  dst_port = 49152;
-
+  
     hashpipe_ibv_flow( hibv_ctx, flow_idx, flow_type,
                        hibv_ctx->mac, src_mac,
                        ether_type,   vlan_tag,
                        src_ip,       dst_ip,
                        src_port,     dst_port);
+    hashpipe_info(thread_name,"hibv_ctx->revc_cc=0x%lx\n",(unsigned long)hibv_ctx->recv_cc);  
+    hashpipe_info(thread_name,"hibv_ctx->recv_cq=0x%lx\n",(unsigned long)hibv_ctx->recv_cq);                 
     // Update status_key with running state
     hashpipe_status_lock_safe(st);
     {
