@@ -72,7 +72,7 @@ static int query_max_wr(const char * interface_name)
   return max_qp_wr;
 }
 
-
+/*
 // Create sniffer flow
 // Use with caution!!!
 static struct ibv_flow *create_sniffer_flow(struct hashpipe_ibv_context * hibv_ctx, uint16_t sniffer_flag)
@@ -135,7 +135,7 @@ static int destroy_sniffer_flow(struct ibv_flow * sniffer_flow)
 {
   return ibv_destroy_flow(sniffer_flow);
 }
-
+*/
 // Function to get a pointer to a databuf's hashpipe_ibv_context structure.
 // Assumes that the hashpipe_ibv_context  structure is tucked into the
 // "padding" bytes of the hpguppi_intput_databuf just after the pktbuf_info
@@ -313,9 +313,12 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
         hibv_ctx->recv_pkt_buf[i].wr.sg_list = &hibv_ctx->recv_sge_buf[i];
 
         base_addr = (uint64_t)pktbuf_block_slot_ptr(db, 0, i);
+        if(i<10)
+          hashpipe_info(__FUNCTION__,"base_addr[%d]=%llu",i,base_addr);
         hibv_ctx->recv_sge_buf[i].addr = base_addr;
-        hibv_ctx->recv_sge_buf[i].length = RPKT_SIZE;
+        hibv_ctx->recv_sge_buf[i].length = hibv_ctx->pkt_size_max;
     }
+    hashpipe_info(__FUNCTION__,"block_addr=%llu",(uint8_t *)db->block);
 
     // Initialize ibverbs
     return hashpipe_ibv_init(hibv_ctx);
@@ -447,8 +450,9 @@ static void *run(hashpipe_thread_args_t * args)
         // If no packets and errno is non-zero
         if(!hibv_rpkt && errno) {
             // Print error, reset errno, and continue receiving
-            hashpipe_error(thread_name, "hashpipe_ibv_recv_pkts");
-            hashpipe_error(thread_name, "errno: %d",errno);
+            //hashpipe_error(thread_name, "hashpipe_ibv_recv_pkts");
+            fprintf(stderr,"Error: %s %s\n",thread_name, "hashpipe_ibv_recv_pkts");
+            fprintf(stderr,"Error: %s errno: %d\n",thread_name, errno);
             errno = 0;
             continue;
         }
@@ -474,6 +478,7 @@ static void *run(hashpipe_thread_args_t * args)
             bytes_received = 0;
             pkts_received = 0;
 
+            /*
             // Manage sniffer_flow as needed
             if(sniffer_flag > 0 && !sniffer_flow) {
                 if(!(sniffer_flow = create_sniffer_flow(hibv_ctx, sniffer_flag))) {
@@ -493,6 +498,7 @@ static void *run(hashpipe_thread_args_t * args)
                 }
                 sniffer_flow = NULL;
             }
+            */
         }
         // If no packets
         if(!hibv_rpkt) {
