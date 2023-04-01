@@ -15,7 +15,7 @@
 #define BLOCK_IN_DATA_SIZE      (RPKT_SIZE * RPKTS_PER_BLOCK )
 
 #define SPECTRA_SIZE            8192
-#define SPECTRAS_PER_BLOCK      8192
+#define SPECTRAS_PER_BLOCK      16384
 #define N_BLOCKS_OUT            32
 // We use 8192*2*8192*32 = 4GBMB for output blocks.
 #define BLOCK_OUT_DATA_SIZE     (SPECTRA_SIZE * SPECTRAS_PER_BLOCK * N_BLOCKS_OUT) 

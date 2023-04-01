@@ -27,6 +27,9 @@
 
 #include <time.h>
 
+#define DEST_MAC {0xb8, 0xce, 0xf6, 0xe5, 0x6b, 0x5a}
+#define SRC_MAC {0x0c, 0x42, 0xa1, 0xbe, 0x34, 0xf8}
+
 // Milliseconds between periodic status buffer updates
 #define PERIODIC_STATUS_BUFFER_UPDATE_MS (200)
 
@@ -54,19 +57,16 @@ static int query_max_wr(const char * interface_name)
   struct ibv_device_attr* ibv_dev_attr = malloc(sizeof(struct ibv_device_attr));
   struct ibv_context* ibv_context = NULL;
   int max_qp_wr = -1;
-
   if(hashpipe_ibv_get_interface_info(interface_name, NULL, &interface_id)) {
     hashpipe_error(interface_name, "error getting interace info");
     errno = 0;
     return -1;
   }
-
   if(hashpipe_ibv_open_device_for_interface_id(
         interface_id, &ibv_context, ibv_dev_attr, NULL)) {
     // Error message already logged
     return -1;
   }
-
   max_qp_wr = ibv_dev_attr->max_qp_wr;
   free(ibv_dev_attr);
   return max_qp_wr;
@@ -217,7 +217,7 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
     uint64_t base_addr;
 
     memset(hibv_ctx, 0, sizeof(struct hashpipe_ibv_context));
-
+    hibv_ctx->port_num = 1;
     // MAXFLOWS got initialized by init() if needed, but we setup the default
     // value again just in case some (buggy) downstream thread removed it from
     // the status buffer.
@@ -247,19 +247,19 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
     hibv_ctx->nqp = 1;
     hibv_ctx->pkt_size_max = RPKT_SIZE; // max for both send and receive //not pkt_size as it is used for the cumulative sge buffers
     hibv_ctx->user_managed_flag = 1;
-
     // Number of send/recv packets (i.e. number of send/recv WRs)
     hibv_ctx->send_pkt_num = 1;
     
-    int num_recv_wr = query_max_wr(hibv_ctx->interface_name);
+    /*int num_recv_wr = query_max_wr(hibv_ctx->interface_name);
     hashpipe_info(__FUNCTION__, "max work requests of %s = %d", hibv_ctx->interface_name, num_recv_wr);
     if(num_recv_wr > RPKTS_PER_BLOCK) {
         num_recv_wr = RPKTS_PER_BLOCK;
     }
+    */
+    int num_recv_wr = RPKTS_PER_BLOCK;
     //int num_recv_wr = RPKTS_PER_BLOCK;
     hibv_ctx->recv_pkt_num = num_recv_wr;
     hashpipe_info(__FUNCTION__, "using %d work requests", num_recv_wr);
-
     if(hibv_ctx->recv_pkt_num * hibv_ctx->pkt_size_max > BLOCK_IN_DATA_SIZE){
         // Should never happen
         hashpipe_warn(__FUNCTION__, "hibv_ctx->recv_pkt_num (%u)*(%u) hibv_ctx->pkt_size_max (%u) > (%lu) BLOCK_IN_DATA_SIZE",
@@ -275,7 +275,6 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
         hibv_ctx->recv_pkt_num, sizeof(struct hashpipe_ibv_recv_pkt)))) {
         return HASHPIPE_ERR_SYS;
     }
-
     // Allocate sge buffers.  We allocate 1 SGE per receive WR.
     if(!(hibv_ctx->send_sge_buf = (struct ibv_sge *)calloc(
         hibv_ctx->send_pkt_num, sizeof(struct ibv_sge)))) {
@@ -285,13 +284,11 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
         hibv_ctx->recv_pkt_num, sizeof(struct ibv_sge)))) {
         return HASHPIPE_ERR_SYS;
     }
-
     // Specify size of send and recv memory regions.
     // Send memory region is just one packet.  Recv memory region spans a data block, with
     // one recv memory region registered per block (see recv_mr_num).
     hibv_ctx->send_mr_size = (size_t)hibv_ctx->send_pkt_num * hibv_ctx->pkt_size_max;
     hibv_ctx->recv_mr_size = db->header.n_block * db->header.block_size;
-
     // Allocate memory for send_mr_buf
     if(!(hibv_ctx->send_mr_buf = (uint8_t *)calloc(
         hibv_ctx->send_pkt_num, hibv_ctx->pkt_size_max))) {
@@ -299,13 +296,11 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
     }
     // Point recv_mr_buf to starts of block 0
     hibv_ctx->recv_mr_buf = (uint8_t *)db->block;
-
     // Setup send WR's num_sge and SGEs' addr/length fields
     hibv_ctx->send_pkt_buf[0].wr.num_sge = 1;
     hibv_ctx->send_pkt_buf[0].wr.sg_list = hibv_ctx->send_sge_buf;
     hibv_ctx->send_sge_buf[0].addr = (uint64_t)hibv_ctx->send_mr_buf;
     hibv_ctx->send_sge_buf[0].length = hibv_ctx->pkt_size_max;
-
     // Setup recv WRs' num_sge and SGEs' addr/length fields
     for(i=0; i<hibv_ctx->recv_pkt_num; i++) {
         hibv_ctx->recv_pkt_buf[i].wr.wr_id = i;
@@ -313,13 +308,10 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
         hibv_ctx->recv_pkt_buf[i].wr.sg_list = &hibv_ctx->recv_sge_buf[i];
 
         base_addr = (uint64_t)pktbuf_block_slot_ptr(db, 0, i);
-        if(i<10)
-          hashpipe_info(__FUNCTION__,"base_addr[%d]=%llu",i,base_addr);
         hibv_ctx->recv_sge_buf[i].addr = base_addr;
         hibv_ctx->recv_sge_buf[i].length = hibv_ctx->pkt_size_max;
     }
-    hashpipe_info(__FUNCTION__,"block_addr=%llu",(uint8_t *)db->block);
-
+    hashpipe_info(__FUNCTION__,"db->block: 0x%llx", (uint64_t)db->block);
     // Initialize ibverbs
     return hashpipe_ibv_init(hibv_ctx);
 }
@@ -397,13 +389,16 @@ static void *run(hashpipe_thread_args_t * args)
     struct ibv_flow * sniffer_flow = NULL;
     int32_t sniffer_flag = -1;
 
+
     wait_for_block_free(db, curblk % N_BLOCKS_IN, st, status_key);
+    
     // Initialize IBV
     if(ibverbs_init(hibv_ctx, st, db)) {
         hashpipe_error(thread_name, "ibverbs_init failed");
         return NULL;
     }
-    
+    errno = 0;
+    hashpipe_info(__FUNCTION__,"value of hibv_ctx->recv_cc: 0x%llx", *((uint64_t*)(hibv_ctx->recv_cc)));
     // Initialize next slot
     next_slot = hibv_ctx->recv_pkt_num + 1;
     if(next_slot > RPKTS_PER_BLOCK) {
@@ -428,12 +423,53 @@ static void *run(hashpipe_thread_args_t * args)
     uint32_t  dst_ip = 0xc0a80228;
     uint16_t  src_port = 49152;
     uint16_t  dst_port = 49152;
-  
+    
+    /*
     hashpipe_ibv_flow( hibv_ctx, flow_idx, flow_type,
                        hibv_ctx->mac, src_mac,
                        ether_type,   vlan_tag,
                        src_ip,       dst_ip,
                        src_port,     dst_port);
+    */
+    struct raw_eth_flow_attr {
+    struct ibv_flow_attr attr;
+    struct ibv_flow_spec_eth spec_eth;
+    } __attribute__((packed)) flow_attr = {
+    .attr = {
+      .comp_mask = 0,
+      .type = IBV_FLOW_ATTR_NORMAL,
+      .size = sizeof(flow_attr),
+      .priority = 0,
+      .num_of_specs = 1,
+      .port = 1,
+      .flags = 0,
+    },
+    .spec_eth = {
+      //.type = IBV_EXP_FLOW_SPEC_ETH,
+      .type = IBV_FLOW_SPEC_ETH,
+      .size = sizeof(struct ibv_flow_spec_eth),
+      //.size = sizeof (struct IBV_FLOW_SPEC_ETH),
+      .val = {
+        .dst_mac = DEST_MAC,
+        .src_mac = SRC_MAC,
+        .ether_type = 0,
+        .src_mac = SRC_MAC,
+        .vlan_tag = 0,
+      },
+      .mask = {
+        .dst_mac = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+      .src_mac = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
+      .ether_type = 0,
+      .vlan_tag = 0,
+      }
+      }
+    };
+    struct ibv_flow *eth_flow;
+    eth_flow = ibv_create_flow(hibv_ctx->qp[0], &flow_attr.attr);
+    if (!eth_flow) {
+      fprintf(stderr, "Couldn't attach steering flow\n");
+      exit(1);
+    }
     hashpipe_info(thread_name,"hibv_ctx->revc_cc=0x%lx\n",(unsigned long)hibv_ctx->recv_cc);  
     hashpipe_info(thread_name,"hibv_ctx->recv_cq=0x%lx\n",(unsigned long)hibv_ctx->recv_cq);                 
     // Update status_key with running state
@@ -442,8 +478,14 @@ static void *run(hashpipe_thread_args_t * args)
         hgeti4(st->buf, "IBVSNIFF", &sniffer_flag);
         hputs(st->buf, status_key, "running");
     }
-
     hashpipe_status_unlock_safe(st);
+
+    hashpipe_info(__FUNCTION__, "db->padding: %llx", (uint64_t)db->padding);
+    hashpipe_info(__FUNCTION__, "db->block: %llx", (uint64_t)db->block);
+    hashpipe_info(__FUNCTION__, "db->block.adc_pkt: %llx", (uint64_t)db->block->adc_pkt);
+    
+    hashpipe_info(__FUNCTION__,"value of hibv_ctx->recv_cc: 0x%llx", *((uint64_t*)(hibv_ctx->recv_cc)));
+
     while (run_threads()) {
         hibv_rpkt = hashpipe_ibv_recv_pkts(hibv_ctx, 50); // 50 ms timeout
 
@@ -458,6 +500,7 @@ static void *run(hashpipe_thread_args_t * args)
         }
 
         // Check for periodic status buffer update interval
+        
         clock_gettime(CLOCK_MONOTONIC_RAW, &ts_now);
         ns_elapsed = ELAPSED_NS(ts_start, ts_now);
         if(ns_elapsed >= PERIODIC_STATUS_BUFFER_UPDATE_MS*1000*1000) {
@@ -497,16 +540,14 @@ static void *run(hashpipe_thread_args_t * args)
                 hashpipe_info(thread_name, "destroy_sniffer_flow succeeded");
                 }
                 sniffer_flow = NULL;
-            }
-            */
+            }*/
+            
         }
         // If no packets
         if(!hibv_rpkt) {
             // Wait for more packets
             continue;
         }
-
-        // Got packets!
 
         // For each packet: update SGE addr
         for(curr_rpkt = hibv_rpkt; curr_rpkt;curr_rpkt = (struct hashpipe_ibv_recv_pkt *)curr_rpkt->wr.next) {
@@ -524,7 +565,7 @@ static void *run(hashpipe_thread_args_t * args)
             // If time to advance the ring buffer block
             if(next_block > curblk+1) {
                 // Mark curblk as filled
-                input_databuf_busywait_filled(db, curblk % N_BLOCKS_IN);
+                input_databuf_set_filled(db, curblk % N_BLOCKS_IN);
 
                 // Increment curblk
                 curblk++;
