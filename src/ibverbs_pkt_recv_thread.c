@@ -250,16 +250,12 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
     // Number of send/recv packets (i.e. number of send/recv WRs)
     hibv_ctx->send_pkt_num = 1;
     
-    /*int num_recv_wr = query_max_wr(hibv_ctx->interface_name);
-    hashpipe_info(__FUNCTION__, "max work requests of %s = %d", hibv_ctx->interface_name, num_recv_wr);
+    int num_recv_wr = query_max_wr(hibv_ctx->interface_name);
     if(num_recv_wr > RPKTS_PER_BLOCK) {
         num_recv_wr = RPKTS_PER_BLOCK;
     }
-    */
-    int num_recv_wr = RPKTS_PER_BLOCK;
-    //int num_recv_wr = RPKTS_PER_BLOCK;
+
     hibv_ctx->recv_pkt_num = num_recv_wr;
-    hashpipe_info(__FUNCTION__, "using %d work requests", num_recv_wr);
     if(hibv_ctx->recv_pkt_num * hibv_ctx->pkt_size_max > BLOCK_IN_DATA_SIZE){
         // Should never happen
         hashpipe_warn(__FUNCTION__, "hibv_ctx->recv_pkt_num (%u)*(%u) hibv_ctx->pkt_size_max (%u) > (%lu) BLOCK_IN_DATA_SIZE",
@@ -311,7 +307,6 @@ static int ibverbs_init(struct hashpipe_ibv_context * hibv_ctx,
         hibv_ctx->recv_sge_buf[i].addr = base_addr;
         hibv_ctx->recv_sge_buf[i].length = hibv_ctx->pkt_size_max;
     }
-    hashpipe_info(__FUNCTION__,"db->block: 0x%llx", (uint64_t)db->block);
     // Initialize ibverbs
     return hashpipe_ibv_init(hibv_ctx);
 }
@@ -419,7 +414,6 @@ static void *run(hashpipe_thread_args_t * args)
     uint16_t  src_port = 49152;
     uint16_t  dst_port = 49152;
     
-    
     hashpipe_ibv_flow( hibv_ctx, flow_idx, flow_type,
                        hibv_ctx->mac, src_mac,
                        ether_type,   vlan_tag,
@@ -440,9 +434,7 @@ static void *run(hashpipe_thread_args_t * args)
         // If no packets and errno is non-zero
         if(!hibv_rpkt && errno) {
             // Print error, reset errno, and continue receiving
-            //hashpipe_error(thread_name, "hashpipe_ibv_recv_pkts");
-            fprintf(stderr,"Error: %s %s\n",thread_name, "hashpipe_ibv_recv_pkts");
-            fprintf(stderr,"Error: %s errno: %d\n",thread_name, errno);
+            hashpipe_error(thread_name, "hashpipe_ibv_recv_pkts");
             errno = 0;
             continue;
         }
