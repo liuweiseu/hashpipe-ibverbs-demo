@@ -369,9 +369,6 @@ static void *run(hashpipe_thread_args_t * args)
     const char * thread_name = args->thread_desc->name;
     const char * status_key = args->thread_desc->skey;
 
-    // The all important hashpipe_ibv_context
-    //struct hashpipe_ibv_context hibv_ctx_inst;
-    //struct hashpipe_ibv_context * hibv_ctx = &hibv_ctx_inst;
     struct hashpipe_ibv_context * hibv_ctx = hashpipe_ibv_context_ptr(db);
 
     // Variables for handing received packets
@@ -389,7 +386,6 @@ static void *run(hashpipe_thread_args_t * args)
     struct ibv_flow * sniffer_flow = NULL;
     int32_t sniffer_flag = -1;
 
-
     wait_for_block_free(db, curblk % N_BLOCKS_IN, st, status_key);
     
     // Initialize IBV
@@ -398,7 +394,6 @@ static void *run(hashpipe_thread_args_t * args)
         return NULL;
     }
     errno = 0;
-    hashpipe_info(__FUNCTION__,"value of hibv_ctx->recv_cc: 0x%llx", *((uint64_t*)(hibv_ctx->recv_cc)));
     // Initialize next slot
     next_slot = hibv_ctx->recv_pkt_num + 1;
     if(next_slot > RPKTS_PER_BLOCK) {
@@ -424,54 +419,13 @@ static void *run(hashpipe_thread_args_t * args)
     uint16_t  src_port = 49152;
     uint16_t  dst_port = 49152;
     
-    /*
+    
     hashpipe_ibv_flow( hibv_ctx, flow_idx, flow_type,
                        hibv_ctx->mac, src_mac,
                        ether_type,   vlan_tag,
                        src_ip,       dst_ip,
                        src_port,     dst_port);
-    */
-    struct raw_eth_flow_attr {
-    struct ibv_flow_attr attr;
-    struct ibv_flow_spec_eth spec_eth;
-    } __attribute__((packed)) flow_attr = {
-    .attr = {
-      .comp_mask = 0,
-      .type = IBV_FLOW_ATTR_NORMAL,
-      .size = sizeof(flow_attr),
-      .priority = 0,
-      .num_of_specs = 1,
-      .port = 1,
-      .flags = 0,
-    },
-    .spec_eth = {
-      //.type = IBV_EXP_FLOW_SPEC_ETH,
-      .type = IBV_FLOW_SPEC_ETH,
-      .size = sizeof(struct ibv_flow_spec_eth),
-      //.size = sizeof (struct IBV_FLOW_SPEC_ETH),
-      .val = {
-        .dst_mac = DEST_MAC,
-        .src_mac = SRC_MAC,
-        .ether_type = 0,
-        .src_mac = SRC_MAC,
-        .vlan_tag = 0,
-      },
-      .mask = {
-        .dst_mac = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
-      .src_mac = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF},
-      .ether_type = 0,
-      .vlan_tag = 0,
-      }
-      }
-    };
-    struct ibv_flow *eth_flow;
-    eth_flow = ibv_create_flow(hibv_ctx->qp[0], &flow_attr.attr);
-    if (!eth_flow) {
-      fprintf(stderr, "Couldn't attach steering flow\n");
-      exit(1);
-    }
-    hashpipe_info(thread_name,"hibv_ctx->revc_cc=0x%lx\n",(unsigned long)hibv_ctx->recv_cc);  
-    hashpipe_info(thread_name,"hibv_ctx->recv_cq=0x%lx\n",(unsigned long)hibv_ctx->recv_cq);                 
+    
     // Update status_key with running state
     hashpipe_status_lock_safe(st);
     {
@@ -479,13 +433,7 @@ static void *run(hashpipe_thread_args_t * args)
         hputs(st->buf, status_key, "running");
     }
     hashpipe_status_unlock_safe(st);
-
-    hashpipe_info(__FUNCTION__, "db->padding: %llx", (uint64_t)db->padding);
-    hashpipe_info(__FUNCTION__, "db->block: %llx", (uint64_t)db->block);
-    hashpipe_info(__FUNCTION__, "db->block.adc_pkt: %llx", (uint64_t)db->block->adc_pkt);
     
-    hashpipe_info(__FUNCTION__,"value of hibv_ctx->recv_cc: 0x%llx", *((uint64_t*)(hibv_ctx->recv_cc)));
-
     while (run_threads()) {
         hibv_rpkt = hashpipe_ibv_recv_pkts(hibv_ctx, 50); // 50 ms timeout
 
