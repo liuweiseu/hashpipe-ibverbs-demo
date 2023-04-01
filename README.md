@@ -13,6 +13,14 @@ You need to change a bit of code for your own platform:
     uint16_t  src_port = 49152;
     uint16_t  dst_port = 49152;
     ```
+# HASHPIPE requirement
+Please use the following branch:
+```
+$ git clone -b seti https://github.com/MydonSolutions/hashpipe
+$ cd hashpipe
+$ git checkout 81a79e626d4fe78f3f7cc6209be45b8569fae42d
+$ autoreconf -is && ./configure && make
+```
 # How to use
 1. compile the code
     ```
