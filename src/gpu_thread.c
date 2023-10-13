@@ -45,7 +45,8 @@ static void *run(hashpipe_thread_args_t * args)
     uint64_t pkt_loss = 0;
     int curblock_in=0;
     int curblock_out=0;
-
+    int first_pkt = 0;
+    int cnt_print = 0;
     while(run_threads()){
         hashpipe_status_lock_safe(st);
         {
@@ -87,16 +88,28 @@ static void *run(hashpipe_thread_args_t * args)
         // we only look at the mcnt here for checking packet loss.
         //TODO: move data into GPU for further processing
         for(slot_id = 0; slot_id<RPKTS_PER_BLOCK; slot_id++)
-        {
-            //cur_mcnt = db_in->block[curblock_in].header.mcnt;
-            cur_mcnt ++;
-            pkt_loss += cur_mcnt - pre_mcnt;
-            pre_mcnt = cur_mcnt;
+        {   
+            cur_mcnt = *(uint64_t*)(db_in->block[curblock_in].adc_pkt[slot_id].pkt_header.mcnt);
+            if(cnt_print < 10)
+            {
+                printf("cur_mcnt: %ld\n", cur_mcnt);
+                cnt_print++;
+            }
+            if(first_pkt == 0)
+            {
+                pre_mcnt = cur_mcnt;
+                first_pkt = 1;
+            }
+            pkt_loss +=  cur_mcnt - pre_mcnt;
+            if(cur_mcnt == 511)
+                pre_mcnt = 0;
+            else
+                pre_mcnt = cur_mcnt + 1;
         }
         // update status buffer
         hashpipe_status_lock_safe(st);
         {
-	        hputi8(st->buf,"PKTLOSS",cur_mcnt);
+	        hputi8(st->buf,"PKTLOSS",pkt_loss);
         }
         hashpipe_status_unlock_safe(st);
 

@@ -10,7 +10,7 @@
 #define RPKT_DAT_SIZE           8192
 #define RPKT_SIZE               (uint32_t)(IP_UDP_HDR_SIZE + RPKT_HDR_SIZE + RPKT_DAT_SIZE)
 #define RPKTS_PER_BLOCK         (int)(16384)
-#define N_BLOCKS_IN             32
+#define N_BLOCKS_IN             64
 // We use 8256*16384*32 = 4.03125GB for input blocks.
 #define BLOCK_IN_DATA_SIZE      (RPKT_SIZE * RPKTS_PER_BLOCK )
 
@@ -23,7 +23,7 @@
 
 /* INPUT BUFFER STRUCTURES*/
 typedef struct input_block_header {
-   uint64_t mcnt;            
+   uint8_t mcnt[8];            
 } input_block_header_t;
 
 typedef uint8_t input_header_cache_alignment[
@@ -32,7 +32,8 @@ typedef uint8_t input_header_cache_alignment[
 
 typedef struct adc_pkt {
     uint8_t ip_udp_hdr[IP_UDP_HDR_SIZE];
-    uint8_t adc_hdr[RPKT_HDR_SIZE];
+    input_block_header_t pkt_header;
+    uint8_t adc_hdr[RPKT_HDR_SIZE-8];
     uint8_t adc_data[RPKT_DAT_SIZE];
 } adc_pkt_t;
 

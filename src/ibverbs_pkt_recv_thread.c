@@ -27,11 +27,11 @@
 
 #include <time.h>
 
-#define DEST_MAC {0xb8, 0xce, 0xf6, 0xe5, 0x6b, 0x5a}
-#define SRC_MAC {0x0c, 0x42, 0xa1, 0xbe, 0x34, 0xf8}
+#define DEST_MAC {0xa0, 0x88, 0xc2, 0x0d, 0x5e, 0x28}
+#define SRC_MAC {0x94, 0x6d, 0xae, 0xac, 0xf8, 0x38}
 
 // Milliseconds between periodic status buffer updates
-#define PERIODIC_STATUS_BUFFER_UPDATE_MS (200)
+#define PERIODIC_STATUS_BUFFER_UPDATE_MS (400)
 
 #define DEFAULT_MAX_FLOWS (16)
 
@@ -406,14 +406,14 @@ static void *run(hashpipe_thread_args_t * args)
 
     uint32_t flow_idx = 0;
     enum ibv_flow_spec_type flow_type = IBV_FLOW_SPEC_UDP;
-    uint8_t src_mac[6] = {0x0c, 0x42, 0xa1, 0xbe, 0x34, 0xf8};
+    uint8_t src_mac[6] = SRC_MAC;
     uint16_t  ether_type = 0;
     uint16_t  vlan_tag = 0;
-    uint32_t  src_ip = 0xc0a80202;
-    uint32_t  dst_ip = 0xc0a80228;
+    uint32_t  src_ip = 0xc0a80302;
+    uint32_t  dst_ip = 0xc0a8030c;
     uint16_t  src_port = 49152;
     uint16_t  dst_port = 49152;
-    
+    printf("DST MAC: %x, %x, %x, %x, %x, %x\n", hibv_ctx->mac[0],hibv_ctx->mac[1],hibv_ctx->mac[2],hibv_ctx->mac[3],hibv_ctx->mac[4],hibv_ctx->mac[5]);
     hashpipe_ibv_flow( hibv_ctx, flow_idx, flow_type,
                        hibv_ctx->mac, src_mac,
                        ether_type,   vlan_tag,
