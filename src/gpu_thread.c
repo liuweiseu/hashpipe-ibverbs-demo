@@ -90,26 +90,23 @@ static void *run(hashpipe_thread_args_t * args)
         for(slot_id = 0; slot_id<RPKTS_PER_BLOCK; slot_id++)
         {   
             cur_mcnt = *(uint64_t*)(db_in->block[curblock_in].adc_pkt[slot_id].pkt_header.mcnt);
-            if(cnt_print < 10)
-            {
-                printf("cur_mcnt: %ld\n", cur_mcnt);
-                cnt_print++;
-            }
             if(first_pkt == 0)
             {
                 pre_mcnt = cur_mcnt;
                 first_pkt = 1;
             }
+            if(cnt_print < 10)
+            {
+                printf("cur_mcnt: %ld; pre_mcnt: %ld\n", cur_mcnt, pre_mcnt);
+                cnt_print++;
+            }
             pkt_loss +=  cur_mcnt - pre_mcnt;
-            if(cur_mcnt == 511)
-                pre_mcnt = 0;
-            else
-                pre_mcnt = cur_mcnt + 1;
+            pre_mcnt = (cur_mcnt + 1)%512;
         }
         // update status buffer
         hashpipe_status_lock_safe(st);
         {
-	        hputi8(st->buf,"PKTLOSS",pkt_loss);
+	        hputu8(st->buf,"PKTLOSS",pkt_loss);
         }
         hashpipe_status_unlock_safe(st);
 

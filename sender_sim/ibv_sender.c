@@ -249,6 +249,11 @@ int main() {
                 exit(1);
             }
             */
+           if (msgs_completed < 0) {
+                printf("Polling error\n");
+                exit(1);
+            }
+           for(int i = 0; i<2000; i++);
         }
     }
     printf("We are done\n");
