@@ -96,10 +96,12 @@ static void *run(hashpipe_thread_args_t * args)
                 pre_mcnt = cur_mcnt;
                 first_pkt = 1;
             }
+			/*
             if(pre_mcnt != cur_mcnt)
             {
                 printf("cur_mcnt: %ld; pre_mcnt: %ld\n", cur_mcnt, pre_mcnt);
             }
+			*/
             pkt_loss +=  cur_mcnt - pre_mcnt;
             pre_mcnt = (cur_mcnt + 1)%512;
         }
