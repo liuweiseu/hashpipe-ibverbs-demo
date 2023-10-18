@@ -346,6 +346,7 @@ static int init(hashpipe_thread_args_t * args)
         // Store ibvpktsz in status buffer (in case it was not there before).
         hputs(st->buf, "IBVPKTSZ", ibvpktsz);
         hputu4(st->buf, "MAXFLOWS", max_flows);
+        hputu8(st->buf, "IBVPKTS", 0);
         // Set status_key to init
         hputs(st->buf, status_key, "init");
     }
@@ -455,6 +456,7 @@ static void *run(hashpipe_thread_args_t * args)
             {
                 hputnr8(st->buf, "IBVGBPS", 6, gbps);
                 hputnr8(st->buf, "IBVPPS", 3, pps);
+                hputu8(st->buf, "IBVPKTS", pkts_received);
             }
             hashpipe_status_unlock_safe(st);
             // Reset counters
