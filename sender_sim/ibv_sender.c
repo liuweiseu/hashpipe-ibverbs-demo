@@ -225,8 +225,8 @@ int main() {
         wr[i].next = NULL;
         wr[i].opcode = IBV_WR_SEND;
     }
-    /*
-    for(int i=0; i<16; i++)
+    /* 
+    for(int i=0; i<SQ_NUM_DESC; i++)
         printf("mcnt %02d: %ld\n",i, *(uint64_t*)((struct packet*)(wr[i].sg_list->addr))->mcnt);
     */
     /* 10. Send Operation */
@@ -241,7 +241,9 @@ int main() {
                 exit(1);
             } 
             msgs_completed = ibv_poll_cq(cq, 1, &wc);
-            /*
+			//while(msgs_completed == 0)
+			//	msgs_completed = ibv_poll_cq(cq, 1, &wc);
+			/*
             if (msgs_completed > 0) {
                 printf("completed message %ld\n", wc.wr_id);
             } else if (msgs_completed < 0) {
@@ -253,7 +255,10 @@ int main() {
                 printf("Polling error\n");
                 exit(1);
             }
-           for(int i = 0; i<500; i++); //200Gbps
+		   for(int i = 0; i<100; i++); //300Gbps
+		   //for(int i = 0; i<200; i++); //250Gbps
+           //for(int i = 0; i<500; i++); //200Gbps
+		   //for(int i = 0; i<1000; i++); //30Gbps
         }
     }
     printf("We are done\n");
