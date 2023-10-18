@@ -27,7 +27,9 @@ static int init(hashpipe_thread_args_t * args)
 {
     hashpipe_status_t st = args->st;
     const char * status_key = args->thread_desc->skey;
-
+    hashpipe_status_lock_safe(&st);
+	hputu8(st.buf,"PKTLOSS",0);
+    hashpipe_status_unlock_safe(&st);
     return 0;
 }
 
@@ -46,7 +48,6 @@ static void *run(hashpipe_thread_args_t * args)
     int curblock_in=0;
     int curblock_out=0;
     int first_pkt = 0;
-    int cnt_print = 0;
     while(run_threads()){
         hashpipe_status_lock_safe(st);
         {
@@ -95,10 +96,9 @@ static void *run(hashpipe_thread_args_t * args)
                 pre_mcnt = cur_mcnt;
                 first_pkt = 1;
             }
-            if(cnt_print < 10)
+            if(pre_mcnt != cur_mcnt)
             {
                 printf("cur_mcnt: %ld; pre_mcnt: %ld\n", cur_mcnt, pre_mcnt);
-                cnt_print++;
             }
             pkt_loss +=  cur_mcnt - pre_mcnt;
             pre_mcnt = (cur_mcnt + 1)%512;
