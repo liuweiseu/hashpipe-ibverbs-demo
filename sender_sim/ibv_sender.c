@@ -23,9 +23,9 @@ struct packet{
 
 /* template of packet to send - in this case icmp */
 
-#define DST_MAC 0xa0, 0x88, 0xc2, 0x0d, 0x5e, 0x28 //6
+#define SRC_MAC 0xa0, 0x88, 0xc2, 0x0d, 0x5e, 0x28 //6
 
-#define SRC_MAC 0x94, 0x6d, 0xae, 0xac, 0xf8, 0x38 // 6
+#define DST_MAC 0x94, 0x6d, 0xae, 0xac, 0xf8, 0x38 // 6
 
 #define ETH_TYPE 0x08, 0x00 // 2
 
@@ -43,7 +43,7 @@ DST_MAC , SRC_MAC, ETH_TYPE, IP_HDRS, SRC_IP, DST_IP, UDP_HDR
 
 };
 
-#define DEV_NO  1
+#define DEV_NO  0
 #define SG_N    1
 #define QP_N    1
 
@@ -208,8 +208,8 @@ int main() {
     * - if we want inline and/or completion
     */
     struct packet *pkt = (struct packet*)packet_large;
-    printf("dst_mac: %x, %x, %x, %x, %x, %x\n", pkt->dst_mac[0],pkt->dst_mac[1],pkt->dst_mac[2],pkt->dst_mac[3],pkt->dst_mac[4],pkt->dst_mac[5]);
-    printf("src_mac: %x, %x, %x, %x, %x, %x\n", pkt->src_mac[0],pkt->src_mac[1],pkt->src_mac[2],pkt->src_mac[3],pkt->src_mac[4],pkt->src_mac[5]);
+    printf("dst_mac: %02x, %02x, %02x, %02x, %02x, %02x\n", pkt->dst_mac[0],pkt->dst_mac[1],pkt->dst_mac[2],pkt->dst_mac[3],pkt->dst_mac[4],pkt->dst_mac[5]);
+    printf("src_mac: %02x, %02x, %02x, %02x, %02x, %02x\n", pkt->src_mac[0],pkt->src_mac[1],pkt->src_mac[2],pkt->src_mac[3],pkt->src_mac[4],pkt->src_mac[5]);
     printf("dst_ip: %d.%d.%d.%d\n", pkt->dst_ip[0], pkt->dst_ip[1], pkt->dst_ip[2], pkt->dst_ip[3]);
     printf("src_ip: %d.%d.%d.%d\n", pkt->src_ip[0], pkt->src_ip[1], pkt->src_ip[2], pkt->src_ip[3]);
     
@@ -253,7 +253,7 @@ int main() {
                 printf("Polling error\n");
                 exit(1);
             }
-           for(int i = 0; i<2000; i++);
+           for(int i = 0; i<500; i++); //200Gbps
         }
     }
     printf("We are done\n");
