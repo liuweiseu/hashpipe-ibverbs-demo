@@ -193,7 +193,7 @@ int main() {
     struct ibv_sge sg_entry[SQ_NUM_DESC];
     struct ibv_send_wr wr[SQ_NUM_DESC], *bad_wr;
     int msgs_completed;
-    struct ibv_wc wc;
+    struct ibv_wc wc[SQ_NUM_DESC];
 
     /* scatter/gather entry describes location and size of data to send*/
     
@@ -217,7 +217,7 @@ int main() {
     {
         wr[i].num_sge = 1;
         *((uint64_t *)((struct packet*)packet_large)->mcnt) = i;
-        memcpy((uint8_t*)buf + i * PKT_LEN, packet_large, sizeof(packet_large));
+		memcpy((uint8_t*)buf + i * PKT_LEN, packet_large, sizeof(packet_large));
         sg_entry[i].length = sizeof(packet_large);
         sg_entry[i].lkey = mr->lkey;
         sg_entry[i].addr = (uint64_t)buf + i * PKT_LEN;
@@ -230,35 +230,25 @@ int main() {
         printf("mcnt %02d: %ld\n",i, *(uint64_t*)((struct packet*)(wr[i].sg_list->addr))->mcnt);
     */
     /* 10. Send Operation */
-    while(1) {
-        for(int i=0;i<SQ_NUM_DESC;i++)
+    for(int i=0;i<SQ_NUM_DESC;i++)
+    {
+        wr[i].wr_id = i;
+        wr[i].send_flags |= IBV_SEND_SIGNALED;
+        ret = ibv_post_send(qp, &wr[i], &bad_wr);
+        if (ret < 0) {
+            fprintf(stderr, "failed in post send\n");
+            exit(1);
+        }
+	}
+	while(1) {
+		msgs_completed = ibv_poll_cq(cq, SQ_NUM_DESC, wc);
+        for(int i=0;i<msgs_completed;i++)
         {
-            wr[i].wr_id = i;
-            wr[i].send_flags |= IBV_SEND_SIGNALED;
-            ret = ibv_post_send(qp, &wr[i], &bad_wr);
-            if (ret < 0) {
-                fprintf(stderr, "failed in post send\n");
-                exit(1);
-            } 
-            msgs_completed = ibv_poll_cq(cq, 1, &wc);
-			//while(msgs_completed == 0)
-			//	msgs_completed = ibv_poll_cq(cq, 1, &wc);
-			/*
-            if (msgs_completed > 0) {
-                printf("completed message %ld\n", wc.wr_id);
-            } else if (msgs_completed < 0) {
-                printf("Polling error\n");
-                exit(1);
-            }
-            */
-           if (msgs_completed < 0) {
-                printf("Polling error\n");
-                exit(1);
-            }
-		   for(int i = 0; i<100; i++); //300Gbps
-		   //for(int i = 0; i<200; i++); //250Gbps
-           //for(int i = 0; i<500; i++); //200Gbps
-		   //for(int i = 0; i<1000; i++); //30Gbps
+			ret = ibv_post_send(qp, &wr[wc[i].wr_id], &bad_wr);
+			if (ret < 0) {
+				fprintf(stderr, "failed in post send\n");
+				exit(1);
+			}
         }
     }
     printf("We are done\n");
