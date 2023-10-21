@@ -48,6 +48,7 @@ static void *run(hashpipe_thread_args_t * args)
     int curblock_in=0;
     int curblock_out=0;
     int first_pkt = 0;
+
     while(run_threads()){
         hashpipe_status_lock_safe(st);
         {
@@ -55,6 +56,7 @@ static void *run(hashpipe_thread_args_t * args)
             hputs(st->buf, status_key, "waiting");
             hputi4(st->buf, "GPUBKOUT", curblock_out);
             hputi8(st->buf,"GPUMCNT",cur_mcnt);
+            hputu8(st->buf,"PKTLOSS",pkt_loss);
         }
         hashpipe_status_unlock_safe(st);
 
@@ -106,12 +108,13 @@ static void *run(hashpipe_thread_args_t * args)
             pre_mcnt = (cur_mcnt + 1)%512;
         }
         // update status buffer
+        /*
         hashpipe_status_lock_safe(st);
         {
 	        hputu8(st->buf,"PKTLOSS",pkt_loss);
         }
         hashpipe_status_unlock_safe(st);
-
+        */
         // Mark output block as filled 
         // TODO: move the processed data into output block
         output_databuf_set_filled(db_out, curblock_out);
