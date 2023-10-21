@@ -20,6 +20,10 @@
 #include "hashpipe.h"
 #include "databuf.h"
 
+#include "hashpipe_ibverbs.h"
+
+#include "gpulib.h"
+
 // Initialization function for Hashpipe.
 // This function is called once when the thread is created
 // args: Arugments passed in by hashpipe framework.
@@ -49,6 +53,17 @@ static void *run(hashpipe_thread_args_t * args)
     int curblock_out=0;
     int first_pkt = 0;
 
+    double gbps = 0;
+
+    void *gpu_buf;
+    int size = RPKT_SIZE * RPKTS_PER_BLOCK;
+    
+    uint8_t *host_buf;
+    Host_MallocBuffer(host_buf, size);
+
+    GPU_GetDevInfo();
+    GPU_MallocBuffer(gpu_buf, size);
+
     while(run_threads()){
         hashpipe_status_lock_safe(st);
         {
@@ -57,6 +72,7 @@ static void *run(hashpipe_thread_args_t * args)
             hputi4(st->buf, "GPUBKOUT", curblock_out);
             hputi8(st->buf,"GPUMCNT",cur_mcnt);
             hputu8(st->buf,"PKTLOSS",pkt_loss);
+            hputnr8(st->buf, "GPUGBPS", 6, gbps);
         }
         hashpipe_status_unlock_safe(st);
 
@@ -115,6 +131,8 @@ static void *run(hashpipe_thread_args_t * args)
         }
         hashpipe_status_unlock_safe(st);
         */
+        //gbps = GPU_MoveDataFromHost((void*)(&db_in->block[curblock_in]), gpu_buf, size);
+        gbps = GPU_MoveDataFromHost(host_buf, gpu_buf, size);
         // Mark output block as filled 
         // TODO: move the processed data into output block
         output_databuf_set_filled(db_out, curblock_out);

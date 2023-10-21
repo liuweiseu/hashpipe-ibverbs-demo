@@ -1,10 +1,26 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "cuda.h"
 
 extern "C" {
 #include "gpulib.h"
+
+#define DEBUG
+
+inline
+cudaError_t checkCuda(cudaError_t result)
+{
+#if defined(DEBUG) || defined(_DEBUG)
+  if (result != cudaSuccess) {
+    fprintf(stderr, "CUDA Runtime Error: %s\n", cudaGetErrorString(result));
+    assert(result == cudaSuccess);
+  }
+#endif
+  return result;
+}
+
 
 void GPU_GetDevInfo()
 {
@@ -48,14 +64,31 @@ void GPU_MallocBuffer(void *buf, int size)
     cudaMalloc((void**)&buf, size);
 }
 
-void GPU_MoveDataFromHost(void *src, void *dst, int size)
+void Host_MallocBuffer(void *buf, int size){
+    cudaMallocHost((void**)&buf, size);
+}
+
+float GPU_MoveDataFromHost(void *src, void *dst, int size)
 {
-    cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice);
+	cudaEvent_t startEvent, stopEvent;   
+    
+    cudaEventCreate(&startEvent);
+	cudaEventCreate(&stopEvent);
+
+	cudaEventRecord(startEvent, 0);
+	cudaError_t(cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice));
+	cudaEventRecord(stopEvent, 0);
+	cudaEventSynchronize(stopEvent);
+
+	float time;
+	cudaEventElapsedTime(&time, startEvent, stopEvent);
+	return size * 1e-6 * 8 / time;
 }
 
 void GPU_MoveDataToHost(void *src, void *dst, int size)
 {
     cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost);
+    
 }
 
 void GPU_FreeBuffer(void *buf)
