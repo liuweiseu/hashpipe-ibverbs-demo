@@ -58,11 +58,9 @@ static void *run(hashpipe_thread_args_t * args)
     void *gpu_buf;
     int size = RPKT_SIZE * RPKTS_PER_BLOCK;
     
-    uint8_t *host_buf;
-    Host_MallocBuffer(host_buf, size);
 
     GPU_GetDevInfo();
-    GPU_MallocBuffer(gpu_buf, size);
+    GPU_MallocBuffer((void **)&gpu_buf, size);
 
     while(run_threads()){
         hashpipe_status_lock_safe(st);
@@ -132,7 +130,6 @@ static void *run(hashpipe_thread_args_t * args)
         hashpipe_status_unlock_safe(st);
         */
         //gbps = GPU_MoveDataFromHost((void*)(&db_in->block[curblock_in]), gpu_buf, size);
-        gbps = GPU_MoveDataFromHost(host_buf, gpu_buf, size);
         // Mark output block as filled 
         // TODO: move the processed data into output block
         output_databuf_set_filled(db_out, curblock_out);
