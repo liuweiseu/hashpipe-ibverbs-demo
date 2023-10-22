@@ -8,7 +8,7 @@ SRC		= demo.c
 
 FLAG  	= -I./GPULib/include \
           -L./GPULib \
-		  -lgpu -lm
+		  -lgpu -lm -lcuda
 
 SUB_DIR = GPULib
 

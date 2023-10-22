@@ -59,13 +59,15 @@ int GPU_SetDevice(int gpu_dev)
         return 0;
 }
 
-void GPU_MallocBuffer(void *buf, int size)
+void GPU_MallocBuffer(void **buf, int size)
 {
-    cudaMalloc((void**)&buf, size);
+    cudaMalloc(buf, size);
 }
 
-void Host_MallocBuffer(void *buf, int size){
-    cudaMallocHost((void**)&buf, size);
+void Host_MallocBuffer(void **buf, int size){
+    int status;
+	status = cudaMallocHost(buf, size);
+	printf("status: %d\n", status);
 }
 
 float GPU_MoveDataFromHost(void *src, void *dst, int size)
@@ -94,5 +96,10 @@ void GPU_MoveDataToHost(void *src, void *dst, int size)
 void GPU_FreeBuffer(void *buf)
 {
      cudaFree(buf);
+}
+
+void Host_FreeBuffer(void *buf)
+{
+	cudaFreeHost(buf);
 }
 }

@@ -6,10 +6,13 @@
  ************************************************************************/
 
 #include<stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+//#include <cuda.h> 
+
 #include "gpulib.h"
 
-
-void main()
+int main()
 {
 	int status = 0;
     
@@ -20,6 +23,21 @@ void main()
         printf("No device will handle overlaps.\r\n");
     else   
         printf("overlaps are supported on the device.\r\n");
-
+	uint8_t *host_buf, *gpu_buf;
+	int size = 8192*16384;
+	float gbps = 0;
+	Host_MallocBuffer((void**)&host_buf, size);
+	
+	if(host_buf==NULL) printf("Allocate mem failed.\n");
+	printf("host_buf: %hhn\n", host_buf);
+	for(int i=0; i<size; i++)
+		host_buf[i] = i&0xff;
+	GPU_MallocBuffer((void**)&gpu_buf, size);
+	gbps = GPU_MoveDataFromHost(host_buf, gpu_buf, size);
+	printf("Bandwidth: %.2f Gbps\n", gbps);
+	Host_FreeBuffer(host_buf);
+	GPU_FreeBuffer(gpu_buf);
+	
+	return 0;
 }
 
