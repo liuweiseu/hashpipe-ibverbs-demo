@@ -242,14 +242,22 @@ int main() {
 	}
 	while(1) {
 		msgs_completed = ibv_poll_cq(cq, SQ_NUM_DESC, wc);
-        for(int i=0;i<msgs_completed;i++)
-        {
-			ret = ibv_post_send(qp, &wr[wc[i].wr_id], &bad_wr);
-			if (ret < 0) {
-				fprintf(stderr, "failed in post send\n");
-				exit(1);
+        if(msgs_completed > 0)
+		{
+			for(int i=0;i<msgs_completed;i++)
+			{
+				ret = ibv_post_send(qp, &wr[wc[i].wr_id], &bad_wr);
+				if (ret < 0) {
+					fprintf(stderr, "failed in post send\n");
+					exit(1);
+				}
 			}
-        }
+		}
+		else if(msgs_completed < 0)
+		{
+			fprintf(stderr, "poll failed\n");
+			exit(1);
+		}
     }
     printf("We are done\n");
     return 0;
