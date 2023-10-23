@@ -3,7 +3,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
- 
+
 #define PKT_LEN 8256
 
 struct packet{
@@ -240,8 +240,10 @@ int main() {
             exit(1);
         }
 	}
+	uint64_t total_completed = 0;
 	while(1) {
 		msgs_completed = ibv_poll_cq(cq, SQ_NUM_DESC, wc);
+		total_completed += msgs_completed;
         if(msgs_completed > 0)
 		{
 			for(int i=0;i<msgs_completed;i++)
@@ -257,6 +259,11 @@ int main() {
 		{
 			fprintf(stderr, "poll failed\n");
 			exit(1);
+		}
+		if(total_completed > 16384)
+		{
+			usleep(1800);
+			total_completed = 0;
 		}
     }
     printf("We are done\n");
