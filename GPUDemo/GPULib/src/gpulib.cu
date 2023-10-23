@@ -81,6 +81,7 @@ void Host_MallocBuffer(void **buf, int size){
 
 float GPU_MoveDataFromHost(void *src, void *dst, int size)
 { 
+	/*
 	cudaEventRecord(startEvent, 0);
 	//cudaError_t(cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice));
 	cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice);
@@ -89,6 +90,9 @@ float GPU_MoveDataFromHost(void *src, void *dst, int size)
 
 	cudaEventElapsedTime(&transfer_time, startEvent, stopEvent);
 	return size * 1e-6  / transfer_time;
+	*/
+	cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice);
+	return 0;
 }
 
 void GPU_MoveDataToHost(void *src, void *dst, int size)
