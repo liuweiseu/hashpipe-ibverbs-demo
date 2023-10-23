@@ -9,6 +9,8 @@ extern "C" {
 
 #define DEBUG
 
+cudaEvent_t startEvent, stopEvent;
+
 inline
 cudaError_t checkCuda(cudaError_t result)
 {
@@ -21,6 +23,12 @@ cudaError_t checkCuda(cudaError_t result)
   return result;
 }
 
+
+void GPU_Init()
+{
+	cudaEventCreate(&startEvent);
+	cudaEventCreate(&stopEvent);
+}
 
 void GPU_GetDevInfo()
 {
@@ -71,12 +79,7 @@ void Host_MallocBuffer(void **buf, int size){
 }
 
 float GPU_MoveDataFromHost(void *src, void *dst, int size)
-{
-	cudaEvent_t startEvent, stopEvent;   
-    
-    cudaEventCreate(&startEvent);
-	cudaEventCreate(&stopEvent);
-
+{ 
 	cudaEventRecord(startEvent, 0);
 	cudaError_t(cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice));
 	cudaEventRecord(stopEvent, 0);
@@ -84,22 +87,32 @@ float GPU_MoveDataFromHost(void *src, void *dst, int size)
 
 	float time;
 	cudaEventElapsedTime(&time, startEvent, stopEvent);
-	return size * 1e-6 * 8 / time;
+	return size * 1e-6  / time;
 }
 
 void GPU_MoveDataToHost(void *src, void *dst, int size)
 {
-    cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost);
-    
+cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost);
+
 }
 
 void GPU_FreeBuffer(void *buf)
 {
-     cudaFree(buf);
+ cudaFree(buf);
 }
 
 void Host_FreeBuffer(void *buf)
 {
-	cudaFreeHost(buf);
+cudaFreeHost(buf);
 }
+}
+
+int Host_PinMem(void *buf, int size)
+{
+return cuMemHostRegister(buf, size, CU_MEMHOSTREGISTER_PORTABLE );
+}
+
+void Host_UnpinMen(void *buf)
+{
+	cuMemHostUnregister(buf);
 }
