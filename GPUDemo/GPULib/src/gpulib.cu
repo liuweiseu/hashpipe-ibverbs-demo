@@ -10,6 +10,7 @@ extern "C" {
 #define DEBUG
 
 cudaEvent_t startEvent, stopEvent;
+float transfer_time;
 
 inline
 cudaError_t checkCuda(cudaError_t result)
@@ -67,7 +68,7 @@ int GPU_SetDevice(int gpu_dev)
         return 0;
 }
 
-void GPU_MallocBuffer(void **buf, int size)
+void GPU_MallocBuffer(void **buf, uint64_t size)
 {
     cudaMalloc(buf, size);
 }
@@ -81,13 +82,13 @@ void Host_MallocBuffer(void **buf, int size){
 float GPU_MoveDataFromHost(void *src, void *dst, int size)
 { 
 	cudaEventRecord(startEvent, 0);
-	cudaError_t(cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice));
+	//cudaError_t(cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice));
+	cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice);
 	cudaEventRecord(stopEvent, 0);
 	cudaEventSynchronize(stopEvent);
 
-	float time;
-	cudaEventElapsedTime(&time, startEvent, stopEvent);
-	return size * 1e-6  / time;
+	cudaEventElapsedTime(&transfer_time, startEvent, stopEvent);
+	return size * 1e-6  / transfer_time;
 }
 
 void GPU_MoveDataToHost(void *src, void *dst, int size)

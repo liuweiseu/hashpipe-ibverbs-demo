@@ -56,12 +56,13 @@ static void *run(hashpipe_thread_args_t * args)
     double gbps = 0;
 
     void *gpu_buf;
-    int size = RPKT_SIZE * RPKTS_PER_BLOCK;
+    uint64_t size = RPKT_SIZE * RPKTS_PER_BLOCK;
+	uint64_t size_full = N_BLOCKS_IN * size; 
     
 	// Init GPU Mem 
 	GPU_Init();
     GPU_GetDevInfo();
-    GPU_MallocBuffer((void **)&gpu_buf, size);
+    GPU_MallocBuffer((void **)&gpu_buf, size_full);
 	// Pin Mem
 	for(int i = 0; i< db_in->header.n_block; i++)
 		Host_PinMem(&db_in->block[i], size);
@@ -134,7 +135,7 @@ static void *run(hashpipe_thread_args_t * args)
         }
         hashpipe_status_unlock_safe(st);
         */
-		gbps = GPU_MoveDataFromHost((void*)(&db_in->block[curblock_in]), gpu_buf, size);
+		gbps = GPU_MoveDataFromHost((void*)(&db_in->block[curblock_in]), gpu_buf+curblock_in*size, size);
         // Mark output block as filled 
         // TODO: move the processed data into output block
         output_databuf_set_filled(db_out, curblock_out);
