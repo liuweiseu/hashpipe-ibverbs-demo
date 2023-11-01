@@ -3,8 +3,12 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
-#define PKT_LEN 8256
+#define PKT_LEN 8192 //8256
+
+#define ELAPSED_NS(start,stop) \
+    (((int64_t)stop.tv_sec-start.tv_sec)*1000*1000*1000+(stop.tv_nsec-start.tv_nsec))
 
 struct packet{
     unsigned char dst_mac[6];
@@ -47,8 +51,24 @@ DST_MAC , SRC_MAC, ETH_TYPE, IP_HDRS, SRC_IP, DST_IP, UDP_HDR
 #define SG_N    1
 #define QP_N    1
 
-int main() {
-
+int main(int argc, char *argv[]) {
+	struct timespec ts_burst_start;
+    struct timespec ts_burst_end;
+    uint64_t ns_elapsed;
+	int speed_limit = 0;
+	for(int i=0; i<argc; i++)
+	{
+		if(!strcmp(argv[i], "-l"))
+        {
+            i++;
+            speed_limit = atoi(argv[i]); 
+        }
+	}
+	int gap_time = 0;
+	if(speed_limit != 0)
+	{
+		gap_time = (int)(SQ_NUM_DESC * PKT_LEN * 8 / speed_limit);
+	}
     printf("Start...\n");
     packet[16] = ((PKT_LEN-14) >> 8);
     packet[17] = ((PKT_LEN-14)&0Xff);
@@ -234,14 +254,45 @@ int main() {
     {
         wr[i].wr_id = i;
         wr[i].send_flags |= IBV_SEND_SIGNALED;
+		/*
         ret = ibv_post_send(qp, &wr[i], &bad_wr);
         if (ret < 0) {
             fprintf(stderr, "failed in post send\n");
             exit(1);
         }
+		*/
 	}
 	uint64_t total_completed = 0;
+	int i = 0;
 	while(1) {
+		clock_gettime(CLOCK_MONOTONIC_RAW, &ts_burst_start);	
+		for(i = 0; i<SQ_NUM_DESC; i++)
+		{
+			ret = ibv_post_send(qp, &wr[i], &bad_wr);
+			if (ret < 0) {
+				fprintf(stderr, "failed in post send\n");
+				exit(1);
+			}
+		}
+		total_completed = 0;
+		while(total_completed < SQ_NUM_DESC)
+		{
+			msgs_completed = ibv_poll_cq(cq, SQ_NUM_DESC, wc);
+			total_completed += msgs_completed;
+		}
+		// add some delay
+		clock_gettime(CLOCK_MONOTONIC_RAW, &ts_burst_end);
+		ns_elapsed = ELAPSED_NS(ts_burst_start, ts_burst_end);
+		if(speed_limit != 0)
+		{
+			while(ns_elapsed < gap_time)
+			{
+				clock_gettime(CLOCK_MONOTONIC_RAW, &ts_burst_end);
+				ns_elapsed = ELAPSED_NS(ts_burst_start, ts_burst_end);
+			}
+		}
+		ns_elapsed = 0;
+		/*
 		msgs_completed = ibv_poll_cq(cq, SQ_NUM_DESC, wc);
 		total_completed += msgs_completed;
         if(msgs_completed > 0)
@@ -262,9 +313,10 @@ int main() {
 		}
 		if(total_completed > 16384)
 		{
-			usleep(1800);
+			//usleep(1800);
 			total_completed = 0;
 		}
+		*/
     }
     printf("We are done\n");
     return 0;
