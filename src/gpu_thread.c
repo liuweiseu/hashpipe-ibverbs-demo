@@ -24,6 +24,11 @@
 
 #include "gpulib.h"
 
+#ifndef ELAPSED_NS
+#define ELAPSED_NS(start,stop) \
+  (ELAPSED_S(start,stop)*1000*1000*1000+((stop).tv_nsec-(start).tv_nsec))
+#endif
+
 // Initialization function for Hashpipe.
 // This function is called once when the thread is created
 // args: Arugments passed in by hashpipe framework.
@@ -45,7 +50,10 @@ static void *run(hashpipe_thread_args_t * args)
     const char * thread_name = args->thread_desc->name;
     const char * status_key = args->thread_desc->skey;
 
-    int rv;
+    struct timespec ts_start;
+    struct timespec ts_now;
+    uint64_t ns_elapsed=0;
+	int rv;
     int slot_id = 0;
     uint64_t cur_mcnt=0, pre_mcnt = 0;
     uint64_t pkt_loss = 0;
@@ -56,12 +64,13 @@ static void *run(hashpipe_thread_args_t * args)
     double gbps = 0;
 
     void *gpu_buf;
-    int size = RPKT_SIZE * RPKTS_PER_BLOCK;
+    uint64_t size = RPKT_SIZE * RPKTS_PER_BLOCK;
+	uint64_t size_full = N_BLOCKS_IN * size; 
     
 	// Init GPU Mem 
 	GPU_Init();
     GPU_GetDevInfo();
-    GPU_MallocBuffer((void **)&gpu_buf, size);
+    GPU_MallocBuffer((void **)&gpu_buf, size_full);
 	// Pin Mem
 	for(int i = 0; i< db_in->header.n_block; i++)
 		Host_PinMem(&db_in->block[i], size);
@@ -75,7 +84,8 @@ static void *run(hashpipe_thread_args_t * args)
             hputi8(st->buf,"GPUMCNT",cur_mcnt);
             hputu8(st->buf,"PKTLOSS",pkt_loss);
             hputnr8(st->buf, "GPUGBPS", 6, gbps);
-        }
+			hputu8(st->buf,"ELAPSED_NS",ns_elapsed);
+		}
         hashpipe_status_unlock_safe(st);
 
         // Wait for new input block to be filled
@@ -106,7 +116,9 @@ static void *run(hashpipe_thread_args_t * args)
             }
         }
 
-        // we only look at the mcnt here for checking packet loss.
+		//clock_gettime(CLOCK_MONOTONIC_RAW, &ts_start);
+        
+		// we only look at the mcnt here for checking packet loss.
         //TODO: move data into GPU for further processing
         for(slot_id = 0; slot_id<RPKTS_PER_BLOCK; slot_id++)
         {   
@@ -126,23 +138,19 @@ static void *run(hashpipe_thread_args_t * args)
             pkt_loss +=  cur_mcnt - pre_mcnt;
             pre_mcnt = (cur_mcnt + 1)%512;
         }
-        // update status buffer
-        /*
-        hashpipe_status_lock_safe(st);
-        {
-	        hputu8(st->buf,"PKTLOSS",pkt_loss);
-        }
-        hashpipe_status_unlock_safe(st);
-        */
-		gbps = GPU_MoveDataFromHost((void*)(&db_in->block[curblock_in]), gpu_buf, size);
-        // Mark output block as filled 
+		// measure the copy time
+		clock_gettime(CLOCK_MONOTONIC_RAW, &ts_start);
+		gbps = GPU_MoveDataFromHost((void*)(&db_in->block[curblock_in]), gpu_buf+curblock_in*size, size);
+       	clock_gettime(CLOCK_MONOTONIC_RAW, &ts_now);
+		// Mark output block as filled 
         // TODO: move the processed data into output block
         output_databuf_set_filled(db_out, curblock_out);
         curblock_out = (curblock_out + 1) % db_out->header.n_block;
         // Mark input block as free and advance
         input_databuf_set_free(db_in, curblock_in);
         curblock_in = (curblock_in + 1) % db_in->header.n_block;
-        
+		//clock_gettime(CLOCK_MONOTONIC_RAW, &ts_now);
+        ns_elapsed = ELAPSED_NS(ts_start, ts_now); 
         // Check for cancel
         pthread_testcancel();
     }

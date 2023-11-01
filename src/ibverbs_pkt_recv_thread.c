@@ -323,7 +323,7 @@ static int init(hashpipe_thread_args_t * args)
     uint32_t max_flows = DEFAULT_MAX_FLOWS;
     char ifname[80] = {0};
     char ibvpktsz[80];
-    strcpy(ibvpktsz, "8256");
+    strcpy(ibvpktsz, "8192");
 
     hashpipe_status_lock_safe(st);
     {
