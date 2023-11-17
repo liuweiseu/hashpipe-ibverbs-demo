@@ -63,14 +63,23 @@ static void *run(hashpipe_thread_args_t * args)
 
     double gbps = 0;
 
-    void *gpu_buf;
+    void *gpu_buf0, *gpu_buf1;
+	void *host_buf;
     uint64_t size = RPKT_SIZE * RPKTS_PER_BLOCK;
 	uint64_t size_full = N_BLOCKS_IN * size; 
     
 	// Init GPU Mem 
 	GPU_Init();
     GPU_GetDevInfo();
-    GPU_MallocBuffer((void **)&gpu_buf, size_full);
+    // malloc memory on gpu0
+    GPU_SetDevice(0);
+    GPU_MallocBuffer((void **)&gpu_buf0, size_full);
+	// malloc memory on gpu1
+    GPU_SetDevice(1);
+    GPU_MallocBuffer((void **)&gpu_buf1, size_full);
+    Host_MallocBuffer((void**)&host_buf, size);
+    // create stream
+    GPU_CreateStream();
 	// Pin Mem
 	for(int i = 0; i< db_in->header.n_block; i++)
 		Host_PinMem(&db_in->block[i], size);
@@ -87,8 +96,8 @@ static void *run(hashpipe_thread_args_t * args)
 			hputu8(st->buf,"ELAPSED_NS",ns_elapsed);
 		}
         hashpipe_status_unlock_safe(st);
-
-        // Wait for new input block to be filled
+        
+		// Wait for new input block to be filled
         while ((rv=input_databuf_wait_filled(db_in, curblock_in)) != HASHPIPE_OK) {
             if (rv==HASHPIPE_TIMEOUT) {
                 hashpipe_status_lock_safe(st);
@@ -101,7 +110,7 @@ static void *run(hashpipe_thread_args_t * args)
                 break;
             }
         }
-
+		
         // Wait for new output block to be free
         while ((rv=output_databuf_wait_free(db_out, curblock_out)) != HASHPIPE_OK) {
             if (rv==HASHPIPE_TIMEOUT) {
@@ -134,14 +143,29 @@ static void *run(hashpipe_thread_args_t * args)
                 printf("cur_mcnt: %ld; pre_mcnt: %ld\n", cur_mcnt, pre_mcnt);
             }
 			*/
-			if(pre_mcnt > cur_mcnt) cur_mcnt+=512;
-            pkt_loss +=  cur_mcnt - pre_mcnt;
-            pre_mcnt = (cur_mcnt + 1)%512;
+			if(pre_mcnt > cur_mcnt) 
+				cur_mcnt+=512;
+			pkt_loss +=  cur_mcnt - pre_mcnt;
+			/*
+			if(pkt_loss > 0)
+			{
+				pkt_loss = 0;
+				printf("cur_mcnt = %ld, pre_mcnt = %ld\n", cur_mcnt, pre_mcnt);
+			}
+			*/	
+			pre_mcnt = (cur_mcnt + 1)%512;
+            
         }
 		// measure the copy time
 		clock_gettime(CLOCK_MONOTONIC_RAW, &ts_start);
-		gbps = GPU_MoveDataFromHost((void*)(&db_in->block[curblock_in]), gpu_buf+curblock_in*size, size);
-       	clock_gettime(CLOCK_MONOTONIC_RAW, &ts_now);
+		//gbps = GPU_MoveDataFromHost((void*)(&db_in->block[curblock_in]), gpu_buf+curblock_in*size, size);
+       	//gbps = GPU_MoveDataFromHost(host_buf, gpu_buf+curblock_in*size, size);
+        //GPU_MoveDataFromHost((void*)(&db_in->block[curblock_in]), gpu_buf0+curblock_in*size, size);
+		GPU_MoveDataFromHostAsync((void*)(&db_in->block[curblock_in]), gpu_buf0+curblock_in*size, size/2,0);
+        GPU_MoveDataFromHostAsync((void*)(&db_in->block[curblock_in]), gpu_buf1+curblock_in*size+size/2, size/2,1);
+        GPU_StreamSync(0);
+        GPU_StreamSync(1);
+        clock_gettime(CLOCK_MONOTONIC_RAW, &ts_now);
 		// Mark output block as filled 
         // TODO: move the processed data into output block
         output_databuf_set_filled(db_out, curblock_out);
@@ -151,6 +175,7 @@ static void *run(hashpipe_thread_args_t * args)
         curblock_in = (curblock_in + 1) % db_in->header.n_block;
 		//clock_gettime(CLOCK_MONOTONIC_RAW, &ts_now);
         ns_elapsed = ELAPSED_NS(ts_start, ts_now); 
+        gbps = size *1.0 / ns_elapsed;
         // Check for cancel
         pthread_testcancel();
     }

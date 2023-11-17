@@ -8,7 +8,7 @@ SRC		= src/gpulib.cu
 NVCCFLAG  = -Xcompiler -fPIC --shared \
 			-I/usr/local/cuda/include -I./include\
 		  	-L/usr/local/cuda/lib64	\
-			-lcuda
+			-lcuda -arch=sm_86
 
 ${TARGET}: ${SRC} ${INC} 
 	${NVCC} -o $@ ${SRC} ${NVCCFLAG}

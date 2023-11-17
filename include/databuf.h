@@ -7,7 +7,7 @@
 
 #define IP_UDP_HDR_SIZE         42
 #define RPKT_HDR_SIZE           22
-#define RPKT_DAT_SIZE           8128 //8192
+#define RPKT_DAT_SIZE           8896//8128 //8192
 #define RPKT_SIZE               (uint32_t)(IP_UDP_HDR_SIZE + RPKT_HDR_SIZE + RPKT_DAT_SIZE)
 #define RPKTS_PER_BLOCK         (int)(65536)
 #define N_BLOCKS_IN             16
