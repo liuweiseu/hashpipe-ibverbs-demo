@@ -24,6 +24,8 @@
 
 #include "gpulib.h"
 
+#define CNT 65536
+
 #ifndef ELAPSED_NS
 #define ELAPSED_NS(start,stop) \
   (ELAPSED_S(start,stop)*1000*1000*1000+((stop).tv_nsec-(start).tv_nsec))
@@ -144,7 +146,7 @@ static void *run(hashpipe_thread_args_t * args)
             }
 			*/
 			if(pre_mcnt > cur_mcnt) 
-				cur_mcnt+=512;
+		    cur_mcnt += CNT;
 			pkt_loss +=  cur_mcnt - pre_mcnt;
 			/*
 			if(pkt_loss > 0)
@@ -153,7 +155,7 @@ static void *run(hashpipe_thread_args_t * args)
 				printf("cur_mcnt = %ld, pre_mcnt = %ld\n", cur_mcnt, pre_mcnt);
 			}
 			*/	
-			pre_mcnt = (cur_mcnt + 1)%512;
+			pre_mcnt = (cur_mcnt + 1)%CNT;
             
         }
 		// measure the copy time
@@ -176,7 +178,8 @@ static void *run(hashpipe_thread_args_t * args)
 		//clock_gettime(CLOCK_MONOTONIC_RAW, &ts_now);
         ns_elapsed = ELAPSED_NS(ts_start, ts_now); 
         gbps = size *1.0 / ns_elapsed;
-        // Check for cancel
+        //gbps = 0.0;
+		// Check for cancel
         pthread_testcancel();
     }
 }
