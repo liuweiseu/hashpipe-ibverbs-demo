@@ -27,11 +27,11 @@
 
 #include <time.h>
 
-#define DEST_MAC {0xb8, 0xce, 0xf6, 0xe5, 0x6b, 0x5a}
-#define SRC_MAC {0x0c, 0x42, 0xa1, 0xbe, 0x34, 0xf8}
+#define SRC_MAC {0xa0, 0x88, 0xc2, 0x0d, 0x5e, 0x28}
+#define DEST_MAC {0x94, 0x6d, 0xae, 0xac, 0xf8, 0x38}
 
 // Milliseconds between periodic status buffer updates
-#define PERIODIC_STATUS_BUFFER_UPDATE_MS (200)
+#define PERIODIC_STATUS_BUFFER_UPDATE_MS (400)
 
 #define DEFAULT_MAX_FLOWS (16)
 
@@ -323,7 +323,7 @@ static int init(hashpipe_thread_args_t * args)
     uint32_t max_flows = DEFAULT_MAX_FLOWS;
     char ifname[80] = {0};
     char ibvpktsz[80];
-    strcpy(ibvpktsz, "8256");
+    strcpy(ibvpktsz, "8192");
 
     hashpipe_status_lock_safe(st);
     {
@@ -346,6 +346,7 @@ static int init(hashpipe_thread_args_t * args)
         // Store ibvpktsz in status buffer (in case it was not there before).
         hputs(st->buf, "IBVPKTSZ", ibvpktsz);
         hputu4(st->buf, "MAXFLOWS", max_flows);
+        hputu8(st->buf, "IBVPKTS", 0);
         // Set status_key to init
         hputs(st->buf, status_key, "init");
     }
@@ -406,14 +407,14 @@ static void *run(hashpipe_thread_args_t * args)
 
     uint32_t flow_idx = 0;
     enum ibv_flow_spec_type flow_type = IBV_FLOW_SPEC_UDP;
-    uint8_t src_mac[6] = {0x0c, 0x42, 0xa1, 0xbe, 0x34, 0xf8};
+    uint8_t src_mac[6] = SRC_MAC;
     uint16_t  ether_type = 0;
     uint16_t  vlan_tag = 0;
-    uint32_t  src_ip = 0xc0a80202;
-    uint32_t  dst_ip = 0xc0a80228;
+    uint32_t  src_ip = 0xc0a80302;
+    uint32_t  dst_ip = 0xc0a8030c;
     uint16_t  src_port = 49152;
     uint16_t  dst_port = 49152;
-    
+    printf("DST MAC: %x, %x, %x, %x, %x, %x\n", hibv_ctx->mac[0],hibv_ctx->mac[1],hibv_ctx->mac[2],hibv_ctx->mac[3],hibv_ctx->mac[4],hibv_ctx->mac[5]);
     hashpipe_ibv_flow( hibv_ctx, flow_idx, flow_type,
                        hibv_ctx->mac, src_mac,
                        ether_type,   vlan_tag,
@@ -427,9 +428,32 @@ static void *run(hashpipe_thread_args_t * args)
         hputs(st->buf, status_key, "running");
     }
     hashpipe_status_unlock_safe(st);
-    
+	
+	/*
+	while(run_threads())
+	{
+	 // Wait for new output block to be free
+        while ((rv=input_databuf_wait_free(db, curblk)) != HASHPIPE_OK) {
+            if (rv==HASHPIPE_TIMEOUT) {
+                hashpipe_status_lock_safe(st);
+                hputs(st->buf, status_key, "blocked compute out");
+                hashpipe_status_unlock_safe(st);
+                continue;
+            } else {
+                hashpipe_error(__FUNCTION__, "error waiting for free databuf");
+                pthread_exit(NULL);
+                break;
+            }
+        }
+		input_databuf_set_filled(db, curblk);
+		curblk++;
+		curblk = curblk% N_BLOCKS_IN;
+
+		pthread_testcancel();
+	}
+	*/
     while (run_threads()) {
-        hibv_rpkt = hashpipe_ibv_recv_pkts(hibv_ctx, 50); // 50 ms timeout
+		hibv_rpkt = hashpipe_ibv_recv_pkts(hibv_ctx, 50); // 50 ms timeout
 
         // If no packets and errno is non-zero
         if(!hibv_rpkt && errno) {
@@ -438,7 +462,7 @@ static void *run(hashpipe_thread_args_t * args)
             errno = 0;
             continue;
         }
-
+		
         // Check for periodic status buffer update interval
         
         clock_gettime(CLOCK_MONOTONIC_RAW, &ts_now);
@@ -455,32 +479,13 @@ static void *run(hashpipe_thread_args_t * args)
             {
                 hputnr8(st->buf, "IBVGBPS", 6, gbps);
                 hputnr8(st->buf, "IBVPPS", 3, pps);
+                hputu8(st->buf, "IBVPKTS", pkts_received);
             }
             hashpipe_status_unlock_safe(st);
             // Reset counters
             bytes_received = 0;
             pkts_received = 0;
 
-            /*
-            // Manage sniffer_flow as needed
-            if(sniffer_flag > 0 && !sniffer_flow) {
-                if(!(sniffer_flow = create_sniffer_flow(hibv_ctx, sniffer_flag))) {
-                hashpipe_error(thread_name, "create_sniffer_flow failed");
-                errno = 0;
-                sniffer_flag = -1;
-                } else {
-                hashpipe_info(thread_name, "create_sniffer_flow succeeded");
-                }
-            } else if (sniffer_flag == 0 && sniffer_flow) {
-                if(destroy_sniffer_flow(sniffer_flow)) {
-                hashpipe_error(thread_name, "destroy_sniffer_flow failed");
-                errno = 0;
-                sniffer_flag = -1;
-                } else {
-                hashpipe_info(thread_name, "destroy_sniffer_flow succeeded");
-                }
-                sniffer_flow = NULL;
-            }*/
             
         }
         // If no packets
@@ -488,7 +493,8 @@ static void *run(hashpipe_thread_args_t * args)
             // Wait for more packets
             continue;
         }
-
+		
+		
         // For each packet: update SGE addr
         for(curr_rpkt = hibv_rpkt; curr_rpkt;curr_rpkt = (struct hashpipe_ibv_recv_pkt *)curr_rpkt->wr.next) {
 
@@ -539,8 +545,7 @@ static void *run(hashpipe_thread_args_t * args)
             hashpipe_error(thread_name, "hashpipe_ibv_release_pkts");
             errno = 0;
         }
-
-        // Will exit if thread has been cancelled
+		// Will exit if thread has been cancelled
         pthread_testcancel();
         }
         return NULL;
