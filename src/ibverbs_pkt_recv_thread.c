@@ -428,9 +428,32 @@ static void *run(hashpipe_thread_args_t * args)
         hputs(st->buf, status_key, "running");
     }
     hashpipe_status_unlock_safe(st);
-    
+	
+	/*
+	while(run_threads())
+	{
+	 // Wait for new output block to be free
+        while ((rv=input_databuf_wait_free(db, curblk)) != HASHPIPE_OK) {
+            if (rv==HASHPIPE_TIMEOUT) {
+                hashpipe_status_lock_safe(st);
+                hputs(st->buf, status_key, "blocked compute out");
+                hashpipe_status_unlock_safe(st);
+                continue;
+            } else {
+                hashpipe_error(__FUNCTION__, "error waiting for free databuf");
+                pthread_exit(NULL);
+                break;
+            }
+        }
+		input_databuf_set_filled(db, curblk);
+		curblk++;
+		curblk = curblk% N_BLOCKS_IN;
+
+		pthread_testcancel();
+	}
+	*/
     while (run_threads()) {
-        hibv_rpkt = hashpipe_ibv_recv_pkts(hibv_ctx, 50); // 50 ms timeout
+		hibv_rpkt = hashpipe_ibv_recv_pkts(hibv_ctx, 50); // 50 ms timeout
 
         // If no packets and errno is non-zero
         if(!hibv_rpkt && errno) {
@@ -439,7 +462,7 @@ static void *run(hashpipe_thread_args_t * args)
             errno = 0;
             continue;
         }
-
+		
         // Check for periodic status buffer update interval
         
         clock_gettime(CLOCK_MONOTONIC_RAW, &ts_now);
@@ -463,26 +486,6 @@ static void *run(hashpipe_thread_args_t * args)
             bytes_received = 0;
             pkts_received = 0;
 
-            /*
-            // Manage sniffer_flow as needed
-            if(sniffer_flag > 0 && !sniffer_flow) {
-                if(!(sniffer_flow = create_sniffer_flow(hibv_ctx, sniffer_flag))) {
-                hashpipe_error(thread_name, "create_sniffer_flow failed");
-                errno = 0;
-                sniffer_flag = -1;
-                } else {
-                hashpipe_info(thread_name, "create_sniffer_flow succeeded");
-                }
-            } else if (sniffer_flag == 0 && sniffer_flow) {
-                if(destroy_sniffer_flow(sniffer_flow)) {
-                hashpipe_error(thread_name, "destroy_sniffer_flow failed");
-                errno = 0;
-                sniffer_flag = -1;
-                } else {
-                hashpipe_info(thread_name, "destroy_sniffer_flow succeeded");
-                }
-                sniffer_flow = NULL;
-            }*/
             
         }
         // If no packets
@@ -490,7 +493,8 @@ static void *run(hashpipe_thread_args_t * args)
             // Wait for more packets
             continue;
         }
-
+		
+		
         // For each packet: update SGE addr
         for(curr_rpkt = hibv_rpkt; curr_rpkt;curr_rpkt = (struct hashpipe_ibv_recv_pkt *)curr_rpkt->wr.next) {
 
@@ -541,8 +545,7 @@ static void *run(hashpipe_thread_args_t * args)
             hashpipe_error(thread_name, "hashpipe_ibv_release_pkts");
             errno = 0;
         }
-
-        // Will exit if thread has been cancelled
+		// Will exit if thread has been cancelled
         pthread_testcancel();
         }
         return NULL;

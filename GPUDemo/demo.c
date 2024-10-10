@@ -1,4 +1,4 @@
-/*************************************************************************
+/************************************************************************
 	> File Name: demo.c
 	> Author: Wei Liu
 	> Mail: liuwei_berkeley@berkeley.edu
@@ -17,7 +17,8 @@ int main()
 	int status = 0;
     
     // Check gpu status
-    GPU_GetDevInfo();
+    GPU_Init();
+	GPU_GetDevInfo();
     status = GPU_SetDevice(0);
     if(status != 0)
         printf("No device will handle overlaps.\r\n");
@@ -27,9 +28,8 @@ int main()
 	int size = 8192*16384;
 	float gbps = 0;
 	Host_MallocBuffer((void**)&host_buf, size);
-	
+
 	if(host_buf==NULL) printf("Allocate mem failed.\n");
-	printf("host_buf: %hhn\n", host_buf);
 	for(int i=0; i<size; i++)
 		host_buf[i] = i&0xff;
 	GPU_MallocBuffer((void**)&gpu_buf, size);

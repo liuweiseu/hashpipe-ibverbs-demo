@@ -7,8 +7,7 @@ INC		= gpulib.h
 SRC		= demo.c
 
 FLAG  	= -I./GPULib/include \
-          -L./GPULib \
-		  -lgpu -lm -lcuda
+		  -lgpu -lm -lcuda 
 
 SUB_DIR = GPULib
 

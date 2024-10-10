@@ -12,6 +12,8 @@ extern "C" {
 cudaEvent_t startEvent, stopEvent;
 float transfer_time;
 
+cudaStream_t stream[STREAM_NUM];
+
 inline
 cudaError_t checkCuda(cudaError_t result)
 {
@@ -68,6 +70,20 @@ int GPU_SetDevice(int gpu_dev)
         return 0;
 }
 
+int GPU_CreateStream()
+{
+	cudaError_t result;
+	for(int i=0; i<STREAM_NUM; i++)
+	{
+		result = cudaStreamCreate(&stream[i]);
+		if(result != cudaSuccess)
+		{
+			printf("Stream can't be created successfully.\n'");
+			return -1;
+		}
+	}
+	return 0;
+}
 void GPU_MallocBuffer(void **buf, uint64_t size)
 {
     cudaMalloc(buf, size);
@@ -87,34 +103,70 @@ float GPU_MoveDataFromHost(void *src, void *dst, int size)
 	cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice);
 	cudaEventRecord(stopEvent, 0);
 	cudaEventSynchronize(stopEvent);
-
 	cudaEventElapsedTime(&transfer_time, startEvent, stopEvent);
+	
 	return size * 1e-6  / transfer_time;
 	*/
+	
 	cudaMemcpy(dst, src, size, cudaMemcpyHostToDevice);
+	return 0;
+	
+}
+
+float GPU_MoveDataFromHostAsync(void *src, void *dst, int size, int i)
+{
+	cudaMemcpyAsync(dst, src, size, cudaMemcpyHostToDevice, stream[i]);
+	return 0;
+}
+
+int GPU_StreamSync(int i)
+{
+	cudaError_t result;
+	result = cudaStreamSynchronize(stream[i]);
+	if(result != cudaSuccess)
+	{
+		printf("Sync stream failed.\n");
+		return -1;
+	}
+	else
+		return 0;
+}
+
+int GPU_DestroyStream()
+{
+	cudaError_t result;
+	for(int i=0; i<STREAM_NUM; i++)
+	{
+		result = cudaStreamDestroy(stream[i]);
+		if(result != cudaSuccess)
+		{
+			printf("Destroy stream failed.\n");
+			return -1;
+		}
+	}
 	return 0;
 }
 
 void GPU_MoveDataToHost(void *src, void *dst, int size)
 {
-cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost);
+	cudaMemcpy(dst, src, size, cudaMemcpyDeviceToHost);
 
 }
 
 void GPU_FreeBuffer(void *buf)
 {
- cudaFree(buf);
+	cudaFree(buf);
 }
 
 void Host_FreeBuffer(void *buf)
 {
-cudaFreeHost(buf);
+	cudaFreeHost(buf);
 }
 }
 
 int Host_PinMem(void *buf, int size)
 {
-return cuMemHostRegister(buf, size, CU_MEMHOSTREGISTER_PORTABLE );
+	return cuMemHostRegister(buf, size, CU_MEMHOSTREGISTER_PORTABLE );
 }
 
 void Host_UnpinMen(void *buf)
