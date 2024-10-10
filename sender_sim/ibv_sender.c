@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
-#define PKT_LEN 8192 //8256
+#define PKT_LEN  8234//8960 //8256
 
 #define ELAPSED_NS(start,stop) \
     (((int64_t)stop.tv_sec-start.tv_sec)*1000*1000*1000+(stop.tv_nsec-start.tv_nsec))
@@ -264,10 +264,13 @@ int main(int argc, char *argv[]) {
 	}
 	uint64_t total_completed = 0;
 	int i = 0;
+    uint16_t cnt = 0;
 	while(1) {
 		clock_gettime(CLOCK_MONOTONIC_RAW, &ts_burst_start);	
 		for(i = 0; i<SQ_NUM_DESC; i++)
-		{
+		{   
+            *(uint16_t *)((struct packet *)(buf + i * PKT_LEN))->mcnt = cnt;
+            cnt = (cnt + 1)%65536;
 			ret = ibv_post_send(qp, &wr[i], &bad_wr);
 			if (ret < 0) {
 				fprintf(stderr, "failed in post send\n");
