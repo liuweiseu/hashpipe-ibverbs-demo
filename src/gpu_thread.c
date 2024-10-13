@@ -39,7 +39,7 @@ static int init(hashpipe_thread_args_t * args)
     hashpipe_status_t st = args->st;
     const char * status_key = args->thread_desc->skey;
     hashpipe_status_lock_safe(&st);
-	hputu8(st.buf,"PKTLOSS",0);
+	hputu8(st.buf,"TPKTLOSS",0);
     hashpipe_status_unlock_safe(&st);
     return 0;
 }
@@ -59,6 +59,7 @@ static void *run(hashpipe_thread_args_t * args)
     int slot_id = 0;
     uint64_t cur_mcnt=0, pre_mcnt = 0;
     uint64_t pkt_loss = 0;
+    uint64_t r_pkt_loss = 0;
     int curblock_in=0;
     int curblock_out=0;
     int first_pkt = 0;
@@ -93,9 +94,9 @@ static void *run(hashpipe_thread_args_t * args)
             hputs(st->buf, status_key, "waiting");
             hputi4(st->buf, "GPUBKOUT", curblock_out);
             hputi8(st->buf,"GPUMCNT",cur_mcnt);
-            hputu8(st->buf,"PKTLOSS",pkt_loss);
+            hputu8(st->buf,"TPKTLOSS",pkt_loss);
             hputnr8(st->buf, "GPUGBPS", 6, gbps);
-			hputu8(st->buf,"ELAPSED_NS",ns_elapsed);
+			hputu8(st->buf,"RPKTLOSS",r_pkt_loss);
 		}
         hashpipe_status_unlock_safe(st);
         
@@ -132,7 +133,7 @@ static void *run(hashpipe_thread_args_t * args)
 		// we only look at the mcnt here for checking packet loss.
         //TODO: move data into GPU for further processing
         for(slot_id = 0; slot_id<RPKTS_PER_BLOCK; slot_id++)
-        {   
+        {      
             cur_mcnt = *(uint64_t*)(db_in->block[curblock_in].adc_pkt[slot_id].pkt_header.mcnt);
             if(first_pkt == 0)
             {
@@ -142,16 +143,20 @@ static void *run(hashpipe_thread_args_t * args)
 			/*
             if(pre_mcnt != cur_mcnt)
             {
+                printf("slot_id:%d\n", slot_id);
                 printf("cur_mcnt: %ld; pre_mcnt: %ld\n", cur_mcnt, pre_mcnt);
             }
 			*/
 			if(pre_mcnt > cur_mcnt) 
-		    cur_mcnt += CNT;
-			pkt_loss +=  cur_mcnt - pre_mcnt;
-			/*
-			if(pkt_loss > 0)
+		        cur_mcnt += CNT;
+            r_pkt_loss = cur_mcnt - pre_mcnt; // this is the real-time pkt loss.
+			pkt_loss +=  cur_mcnt - pre_mcnt; // this is total pkt loss.
+			
+			//if(pkt_loss > 0)
+            /*
+            if((cur_mcnt - pre_mcnt) > 0)
 			{
-				pkt_loss = 0;
+				//pkt_loss = 0;
 				printf("cur_mcnt = %ld, pre_mcnt = %ld\n", cur_mcnt, pre_mcnt);
 			}
 			*/	
