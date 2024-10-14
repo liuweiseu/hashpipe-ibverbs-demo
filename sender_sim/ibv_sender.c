@@ -5,7 +5,10 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
-#define PKT_LEN  8234//8960 //8256
+#define PKT_LEN  8960//8960 //8256
+#define UPDATE_MS 1000
+
+#define MEASURE_BANDWIDTH(size, t) ((double)size * 8.0 / t)
 
 #define ELAPSED_NS(start,stop) \
     (((int64_t)stop.tv_sec-start.tv_sec)*1000*1000*1000+(stop.tv_nsec-start.tv_nsec))
@@ -54,7 +57,10 @@ DST_MAC , SRC_MAC, ETH_TYPE, IP_HDRS, SRC_IP, DST_IP, UDP_HDR
 int main(int argc, char *argv[]) {
 	struct timespec ts_burst_start;
     struct timespec ts_burst_end;
+    struct timespec ts_start;
+    struct timespec ts_now;
     uint64_t ns_elapsed;
+    uint64_t ns_elapsed_sec;
 	int speed_limit = 0;
 	for(int i=0; i<argc; i++)
 	{
@@ -265,8 +271,22 @@ int main(int argc, char *argv[]) {
 	uint64_t total_completed = 0;
 	int i = 0;
     uint16_t cnt = 0;
+    int total_send = 0;
+    int total_send_pre = 0;
+    float bandwidth;
 	while(1) {
 		clock_gettime(CLOCK_MONOTONIC_RAW, &ts_burst_start);	
+        ns_elapsed_sec = ELAPSED_NS(ts_start, ts_burst_start);
+		if(ns_elapsed_sec > UPDATE_MS * 1000 * 1000)
+		{
+			ts_start = ts_burst_start;
+			if(total_send != total_send_pre)
+			{
+                bandwidth = MEASURE_BANDWIDTH((total_send - total_send_pre) * PKT_LEN, ns_elapsed_sec);
+                total_send_pre = total_send;
+				printf("total_send: %-10d Bandwidth: %6.3f Gbps\n",total_send, bandwidth);
+			}
+		}
 		for(i = 0; i<SQ_NUM_DESC; i++)
 		{   
             *(uint16_t *)((struct packet *)(buf + i * PKT_LEN))->mcnt = cnt;
@@ -283,6 +303,7 @@ int main(int argc, char *argv[]) {
 			msgs_completed = ibv_poll_cq(cq, SQ_NUM_DESC, wc);
 			total_completed += msgs_completed;
 		}
+        total_send += SQ_NUM_DESC;
 		// add some delay
 		clock_gettime(CLOCK_MONOTONIC_RAW, &ts_burst_end);
 		ns_elapsed = ELAPSED_NS(ts_burst_start, ts_burst_end);
