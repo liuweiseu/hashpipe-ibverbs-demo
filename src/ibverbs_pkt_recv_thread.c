@@ -72,7 +72,7 @@ static int query_max_wr(const char * interface_name)
   return max_qp_wr;
 }
 
-/*
+
 // Create sniffer flow
 // Use with caution!!!
 static struct ibv_flow *create_sniffer_flow(struct hashpipe_ibv_context * hibv_ctx, uint16_t sniffer_flag)
@@ -135,7 +135,7 @@ static int destroy_sniffer_flow(struct ibv_flow * sniffer_flow)
 {
   return ibv_destroy_flow(sniffer_flow);
 }
-*/
+
 // Function to get a pointer to a databuf's hashpipe_ibv_context structure.
 // Assumes that the hashpipe_ibv_context  structure is tucked into the
 // "padding" bytes of the hpguppi_intput_databuf just after the pktbuf_info
@@ -405,6 +405,7 @@ static void *run(hashpipe_thread_args_t * args)
     double gbps;
     double pps;
 
+    /*
     uint32_t flow_idx = 0;
     enum ibv_flow_spec_type flow_type = IBV_FLOW_SPEC_UDP;
     uint8_t src_mac[6] = SRC_MAC;
@@ -420,7 +421,7 @@ static void *run(hashpipe_thread_args_t * args)
                        ether_type,   vlan_tag,
                        src_ip,       dst_ip,
                        src_port,     dst_port);
-    
+    */    
     // Update status_key with running state
     hashpipe_status_lock_safe(st);
     {
@@ -485,8 +486,25 @@ static void *run(hashpipe_thread_args_t * args)
             // Reset counters
             bytes_received = 0;
             pkts_received = 0;
-
-            
+            // Manage sniffer_flow as needed
+            if(sniffer_flag > 0 && !sniffer_flow) {
+                if(!(sniffer_flow = create_sniffer_flow(hibv_ctx, sniffer_flag))) {
+                  hashpipe_error(thread_name, "create_sniffer_flow failed");
+                  errno = 0;
+                  sniffer_flag = -1;
+                } else {
+                  hashpipe_info(thread_name, "create_sniffer_flow succeeded");
+                }
+            } else if (sniffer_flag == 0 && sniffer_flow) {
+                if(destroy_sniffer_flow(sniffer_flow)) {
+                  hashpipe_error(thread_name, "destroy_sniffer_flow failed");
+                  errno = 0;
+                  sniffer_flag = -1;
+                } else {
+                  hashpipe_info(thread_name, "destroy_sniffer_flow succeeded");
+                }
+                sniffer_flow = NULL;
+            }      
         }
         // If no packets
         if(!hibv_rpkt) {

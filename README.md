@@ -1,5 +1,6 @@
 # HASHPIPE-Ibverbs-Demo
-This is the demo code for [hashpipe](https://github.com/david-macmahon/hashpipe) embedded ibverbs.
+This is the demo code for [hashpipe](https://github.com/david-macmahon/hashpipe) embedded ibverbs.  
+The code was referred from [here](https://github.com/MydonSolutions/hpguppi_daq/blob/seti-ata-8bit/src/hpguppi_ibverbs_pkt_thread.c).
 # Platform info
 You need to change a bit of code for your own platform:
 * scripts/start_hp_ibv_demo.sh:   
