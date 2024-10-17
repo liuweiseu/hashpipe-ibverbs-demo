@@ -13,6 +13,8 @@
 #include "pkt_gen.h"
 #include "utils.h"
 
+#define UPDATE_MS 1000
+
 uint64_t ns_elapsed;
 struct timespec ts_start;
 struct timespec ts_now;
@@ -142,8 +144,23 @@ int main(int argc, char *argv[])
 
     // send pkts
     i = 0;
+    int total_send = 0;
+    int total_send_pre = 0;
+    float bandwidth;
     while((i < args.npkt_grp) || args.inf) 
-    {
+    {   
+        clock_gettime(CLOCK_MONOTONIC_RAW, &ts_now);
+        ns_elapsed = ELAPSED_NS(ts_start, ts_now);
+		if(ns_elapsed > UPDATE_MS * 1000 * 1000)
+		{
+			ts_start = ts_now;
+			if(total_send != total_send_pre)
+			{
+                bandwidth = MEASURE_BANDWIDTH((total_send - total_send_pre) * PKT_LEN, ns_elapsed);
+                total_send_pre = total_send;
+				printf("total_send: %-10d Bandwidth: %6.3f Gbps\n",total_send, bandwidth);
+			}
+		}
         ret = ib_send(&ibv_res);
         if (ret < 0) {
             printf("Failed to send pkts.\n");

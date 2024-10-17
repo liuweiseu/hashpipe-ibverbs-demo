@@ -6,7 +6,7 @@ project(Demos)
 #find_package(CUDA REQUIRED)
 
 # set the executable name
-set(EXECUTABLE_SEND SendDemo)
+set(EXECUTABLE_SEND SenderSim)
 
 # set compiler
 set(CMAKE_C_COMPILER "gcc")
