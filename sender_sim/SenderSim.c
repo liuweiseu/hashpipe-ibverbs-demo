@@ -167,6 +167,7 @@ int main(int argc, char *argv[])
             return -6;
         }
         i++;
+        total_send += ibv_res.send_wr_num;
     }
     printf("Send pkts successfully.\n");
     free(buf);

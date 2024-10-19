@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.15)
 # set project name
 project(Demos)
 
+add_subdirectory(ibv_utils)
 #find_package(CUDA REQUIRED)
 
 # set the executable name
